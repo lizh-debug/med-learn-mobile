@@ -1,16 +1,29 @@
 // Root layout for expo-router
 import React, { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ensureInit } from '../src/lib/fileStore';
+import { getAIConfig } from '../src/lib/apiKeyStore';
+import { useChatStore } from '../src/store/useChatStore';
+import AIChatFAB from '../src/components/AIChatFAB';
+import AIChatPanel from '../src/components/AIChatPanel';
 
 export default function RootLayout() {
   useEffect(() => {
     ensureInit().catch(console.error);
+    loadAPIConfig();
   }, []);
 
+  async function loadAPIConfig() {
+    const cfg = await getAIConfig();
+    if (cfg.apiKey) {
+      useChatStore.getState().setAPIConfig(cfg.apiKey, cfg.endpoint, cfg.model);
+    }
+  }
+
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
@@ -72,6 +85,8 @@ export default function RootLayout() {
           }}
         />
       </Stack>
-    </>
+      <AIChatFAB />
+      <AIChatPanel />
+    </View>
   );
 }
