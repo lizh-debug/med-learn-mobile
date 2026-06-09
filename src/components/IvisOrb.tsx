@@ -28,8 +28,8 @@ export default React.memo(function IvisOrb() {
     // Continuous pulse
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: PULSE_DURATION / 2, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0, duration: PULSE_DURATION / 2, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: PULSE_DURATION / 2, useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: PULSE_DURATION / 2, useNativeDriver: false }),
       ]),
     );
     // Slow rotation
@@ -37,7 +37,7 @@ export default React.memo(function IvisOrb() {
       Animated.timing(rotateAnim, {
         toValue: 1,
         duration: 12000,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     );
     pulse.start();
@@ -49,8 +49,8 @@ export default React.memo(function IvisOrb() {
     if (isLoading) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(scaleAnim, { toValue: 1.08, duration: 600, useNativeDriver: true }),
-          Animated.timing(scaleAnim, { toValue: 0.95, duration: 600, useNativeDriver: true }),
+          Animated.timing(scaleAnim, { toValue: 1.08, duration: 600, useNativeDriver: false }),
+          Animated.timing(scaleAnim, { toValue: 0.95, duration: 600, useNativeDriver: false }),
         ]),
       ).start();
     } else {
