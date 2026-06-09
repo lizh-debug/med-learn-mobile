@@ -16,6 +16,7 @@ export default React.memo(function IvisOrb() {
   const isPanelOpen = useChatStore((s) => s.isPanelOpen);
   const isLoading = useChatStore((s) => s.isLoading);
   const openPanel = useChatStore((s) => s.openPanel);
+  const hidden = isPanelOpen;
 
   // Pulse animation for outer ring
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -25,6 +26,7 @@ export default React.memo(function IvisOrb() {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    if (hidden) return;
     // Continuous pulse
     const pulse = Animated.loop(
       Animated.sequence([
@@ -43,7 +45,7 @@ export default React.memo(function IvisOrb() {
     pulse.start();
     rotate.start();
     return () => { pulse.stop(); rotate.stop(); };
-  }, []);
+  }, [hidden]);
 
   useEffect(() => {
     if (isLoading) {
@@ -58,8 +60,6 @@ export default React.memo(function IvisOrb() {
     }
   }, [isLoading]);
 
-  if (isPanelOpen) return null;
-
   const outerScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.3] });
   const outerOpacity = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.1, 0.4] });
   const rotate = rotateAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
@@ -73,6 +73,8 @@ export default React.memo(function IvisOrb() {
     borderColor: neonCyan,
     opacity,
   });
+
+  if (hidden) return null;
 
   return (
     <Animated.View style={[styles.wrapper, { transform: [{ scale: scaleAnim }] }]}>
