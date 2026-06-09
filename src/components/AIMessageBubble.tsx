@@ -43,7 +43,7 @@ export default React.memo(function AIMessageBubble({ message }: Props) {
       if (tableRowsAt.has(i)) {
         const rows = tableRowsAt.get(i)!;
         if (rows.length >= 2) {
-          elements.push(<MarkdownTable key={i} rows={rows} scrollEnabled={false} />);
+          elements.push(<MarkdownTable key={i} rows={rows} scrollEnabled />);
           continue;
         }
       }
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   assistantWrapper: { justifyContent: 'flex-start' },
   avatar: { fontSize: 16, marginHorizontal: 4, marginBottom: 2 },
   bubble: {
-    maxWidth: '78%', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12,
+    maxWidth: '88%', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 12,
   },
   userBubble: { backgroundColor: '#00E5FF', borderBottomRightRadius: 4 },
   assistantBubble: { backgroundColor: '#0F1520', borderBottomLeftRadius: 4, borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.15)' },

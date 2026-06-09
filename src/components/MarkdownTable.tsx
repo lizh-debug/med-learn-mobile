@@ -63,7 +63,7 @@ export default React.memo(function MarkdownTable({ rows, scrollEnabled = true }:
 });
 
 const styles = StyleSheet.create({
-  tableScroll: { marginVertical: 8 },
+  tableScroll: { marginVertical: 8, maxWidth: '100%' },
   tableWrap: {
     borderWidth: 1, borderColor: '#1E2838', borderRadius: 8, overflow: 'hidden',
   },
