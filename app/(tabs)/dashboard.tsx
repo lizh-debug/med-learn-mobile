@@ -9,8 +9,9 @@
 //  6. FAB（新建卡片）
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet,
+  View, Text, TextInput, ScrollView, StyleSheet,
   TouchableOpacity, RefreshControl, ActivityIndicator, Dimensions,
+  Modal, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -19,7 +20,7 @@ import { listDirRecursive, readNode, readFile, ensureInit } from '../../src/lib/
 import { extractWikiLinks } from '../../src/lib/markdownParser';
 import {
   copper, copperBg, copperLight, paperWhite, jadeWhite,
-  inkColor, ochreGray, clayGray, warmBorder,
+  inkColor, ochreGray, frostGray, clayGray, warmBorder,
   layer基础, layer桥梁, layer临床, layer前沿,
 } from '../../src/theme/colors';
 import { shadows, copperGlow } from '../../src/theme/shadows';
@@ -95,8 +96,17 @@ export default function DashboardScreen() {
   const recentCards = useAppStore((s) => s.recentCards);
   const setRecentCards = useAppStore((s) => s.setRecentCards);
   const [refreshing, setRefreshing] = useState(false);
+  const [hiddenTasks, setHiddenTasks] = useState<Set<string>>(new Set());
+  const [showCardPicker, setShowCardPicker] = useState(false);
+  const [pickerFilter, setPickerFilter] = useState('');
   const pinnedCards = useAppStore((s) => s.pinnedCards);
   const togglePinnedCard = useAppStore((s) => s.togglePinnedCard);
+
+  function handleRemoveTask(cardPath: string) {
+    if (pinnedCards.includes(cardPath)) togglePinnedCard(cardPath);
+    else setHiddenTasks(prev => new Set([...prev, cardPath]));
+  }
+
   const [hasFocused, setHasFocused] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const [allCards, setAllCards] = useState<CardMeta[]>([]);
@@ -209,6 +219,11 @@ export default function DashboardScreen() {
     return combined.slice(0, 6);
   }, [recentCards, pinnedCards, allCards]);
 
+  const visibleTasks = useMemo(() =>
+    todayTasks.filter(c => !hiddenTasks.has(c.path)),
+    [todayTasks, hiddenTasks]
+  );
+
   function scrollSystem(dir: 'left' | 'right') {
     scrollRef.current?.scrollTo({ x: dir === 'left' ? 0 : 9999, animated: true });
   }
@@ -318,14 +333,18 @@ export default function DashboardScreen() {
 
         {/* 4. 今日待办 */}
         <Text style={styles.sectionLabel}>今日待办</Text>
-        {todayTasks.length === 0 ? (
+        {visibleTasks.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="book-outline" size={36} color={clayGray} />
             <Text style={styles.emptyTitle}>今日无事</Text>
             <Text style={styles.emptyHint}>补一张过去的卡片，或者翻开《生理学》第 8 章</Text>
+            <TouchableOpacity style={styles.addTaskBtn} onPress={() => setShowCardPicker(true)}>
+              <Ionicons name="add-circle-outline" size={18} color="#C8A45C" />
+              <Text style={styles.addTaskBtnText}>添加待办</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          todayTasks.map((card, idx) => {
+          visibleTasks.map((card, idx) => {
             const layerColor =
               card.layer === '基础' ? layer基础 :
               card.layer === '桥梁' ? layer桥梁 :
@@ -354,13 +373,67 @@ export default function DashboardScreen() {
                     color={pinnedCards.includes(card.path) ? '#FFB800' : clayGray}
                   />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleRemoveTask(card.path)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ paddingHorizontal: 2 }}
+                >
+                  <Ionicons name="close" size={16} color={clayGray} />
+                </TouchableOpacity>
                 <Ionicons name="chevron-forward" size={16} color={clayGray} />
               </TouchableOpacity>
             );
           })
         )}
 
-        {/* 底部留白给 FAB + Tab Bar */}
+        {/* Add task button */}
+        <TouchableOpacity style={styles.addTaskRow} onPress={() => setShowCardPicker(true)} activeOpacity={0.6}>
+          <Ionicons name="add-circle-outline" size={20} color="#C8A45C" />
+          <Text style={styles.addTaskRowText}>添加待办卡片</Text>
+        </TouchableOpacity>
+
+        {/* Card Picker Modal */}
+        <Modal visible={showCardPicker} transparent animationType="slide" onRequestClose={() => setShowCardPicker(false)}>
+          <Pressable style={styles.pickerBackdrop} onPress={() => setShowCardPicker(false)}>
+            <Pressable style={styles.pickerSheet} onPress={e => e.stopPropagation()}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>选择卡片</Text>
+                <TouchableOpacity onPress={() => setShowCardPicker(false)}>
+                  <Ionicons name="close" size={22} color={frostGray} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.pickerSearch}
+                value={pickerFilter}
+                onChangeText={setPickerFilter}
+                placeholder="搜索卡片..."
+                placeholderTextColor="#5A6980"
+              />
+              <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+                {allCards.filter(c => pickerFilter === '' || c.title.includes(pickerFilter) || c.system.includes(pickerFilter)).slice(0, 30).map(c => (
+                  <TouchableOpacity
+                    key={c.path}
+                    style={styles.pickerItem}
+                    onPress={() => { togglePinnedCard(c.path); setShowCardPicker(false); }}
+                    activeOpacity={0.6}
+                  >
+                    <Ionicons
+                      name={pinnedCards.includes(c.path) ? 'checkmark-circle' : 'add-circle-outline'}
+                      size={20}
+                      color={pinnedCards.includes(c.path) ? '#C8A45C' : clayGray}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickerItemTitle} numberOfLines={1}>{c.title}</Text>
+                      <Text style={styles.pickerItemMeta}>{c.system}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Bottom spacer */}
         <View style={{ height: 130 }} />
       </ScrollView>
 
@@ -565,6 +638,43 @@ const styles = StyleSheet.create({
     color: ochreGray,
     marginTop: 2,
   },
+
+  addTaskRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, marginTop: 4,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(200,164,92,0.06)',
+    borderWidth: 0.5, borderColor: 'rgba(200,164,92,0.10)',
+    borderStyle: 'dashed',
+  },
+  addTaskRowText: { fontSize: 14, fontWeight: '600', color: '#C8A45C' },
+  addTaskBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 16, paddingVertical: 10, paddingHorizontal: 20,
+    borderRadius: 10, backgroundColor: 'rgba(200,164,92,0.08)',
+  },
+  addTaskBtnText: { fontSize: 14, fontWeight: '600', color: '#C8A45C' },
+
+  // Card picker modal
+  pickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  pickerSheet: {
+    backgroundColor: '#161B22', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 20, maxHeight: '70%',
+    borderTopWidth: 0.5, borderColor: 'rgba(200,164,92,0.15)',
+  },
+  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  pickerTitle: { fontSize: 18, fontWeight: '700', color: '#E8EDF5' },
+  pickerSearch: {
+    backgroundColor: '#1A2233', borderRadius: 10, padding: 12,
+    fontSize: 14, color: '#E8EDF5', marginBottom: 12,
+  },
+  pickerList: { maxHeight: 400 },
+  pickerItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  pickerItemTitle: { fontSize: 15, fontWeight: '600', color: '#E8EDF5' },
+  pickerItemMeta: { fontSize: 12, color: '#5A6980', marginTop: 2 },
 
   // ── FAB ──
   fab: {
