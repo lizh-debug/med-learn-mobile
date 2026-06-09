@@ -51,3 +51,13 @@ output += '];\n';
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, output, 'utf-8');
 console.log(`Generated ${OUT} (${(output.length / 1024).toFixed(1)} KB)`);
+
+// Also generate JSON for web lazy loading (avoids bundling ~250KB into JS)
+const JSON_OUT = path.join(__dirname, '..', 'public', 'presets.json');
+const jsonData = files.map(file => {
+  const content = fs.readFileSync(path.join(SRC, file), 'utf-8');
+  return { path: file, content };
+});
+fs.mkdirSync(path.dirname(JSON_OUT), { recursive: true });
+fs.writeFileSync(JSON_OUT, JSON.stringify(jsonData), 'utf-8');
+console.log(`Generated ${JSON_OUT} (${(jsonData.length)} files, ${(JSON.stringify(jsonData).length / 1024).toFixed(1)} KB)`);

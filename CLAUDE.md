@@ -2,7 +2,16 @@
 
 # med-learn-mobile
 
-Expo SDK 54 模块化医学学习 App，3 个 Tab：骨架 / 今天 / 锚点。
+Expo SDK 54 模块化医学学习 App。正在进行 UI 升级：从 3 Tab（骨架/今天/锚点）迁移到 4 Tab（仪表盘/知识网络/临床推理/我的）。
+
+## 🎨 当前任务：UI 重设计
+
+完整的 UI 改造方案在 `UI-REDESIGN-PLAN.md` — **每次改动前务必先阅读该文件**。
+
+核心变化：
+- 色彩：iOS 默认蓝 → 暖铜学术色系（铜色 #C8865D，宣纸白 #FAF7F2，墨色 #1C1C2A）
+- Tab：骨架/今天/锚点 → 仪表盘/知识网络/临床推理/我的
+- 风格：Markdown 浏览器 → 医学知识驾驶舱
 
 ## 常用命令
 - `npx expo start` — 启动开发服务器
@@ -15,6 +24,7 @@ Expo SDK 54 模块化医学学习 App，3 个 Tab：骨架 / 今天 / 锚点。
 - Markdown 解析：`src/lib/markdownParser.ts` — wiki 链接 `[[path|display]]` 解析
 - 状态管理：`src/store/useAppStore.ts` — Zustand，含 skeletonRefreshKey 刷新机制
 - 路径规范化：`n(path)` 自动追加 `.md` 后缀
+- 主题系统：`src/theme/` — colors / typography / spacing / shadows / decorations
 
 ## 关键组件
 - `SkeletonTree.tsx` — 4 层骨架树，解析 wiki 链接 + 📖 速通锚点
@@ -23,6 +33,8 @@ Expo SDK 54 模块化医学学习 App，3 个 Tab：骨架 / 今天 / 锚点。
 - `AnchorEditor.tsx` — 锚点 4 段式编辑（一句话/鉴别矩阵/反向追溯/关联骨架）
 - `WikiLinkText.tsx` — 智能链接路由（骨架→skeleton，锚点→anchor，总入口→overview）
 - `BacklinksList.tsx` — 反向链接交互面板
+- `GraphView.tsx` — 知识图谱力导向图（canvas/WebView）
+- `AIChatFAB.tsx` / `AIChatPanel.tsx` — AI 聊天助手
 
 ## 数据格式
 - 骨架：`骨架/{系统名}.md`，4 层 = 🟢基础 / 🟡桥梁 / 🔴临床 / 🔵前沿

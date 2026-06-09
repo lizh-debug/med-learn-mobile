@@ -1,13 +1,16 @@
-// Tab 1: System skeleton - shows 4-layer knowledge tree
+// Tab 1: System skeleton — 暖铜学术风格知识树浏览器
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAppStore, SYSTEMS } from '../../src/store/useAppStore';
-import SkeletonTree from '../../src/components/SkeletonTree';
 import { Link } from 'expo-router';
+import { useAppStore, SYSTEMS } from '../../src/store/useAppStore';
+import { copper, copperBg, paperWhite, jadeWhite, inkColor, ochreGray, clayGray, warmBorder } from '../../src/theme/colors';
+import { shadows } from '../../src/theme/shadows';
+import { spacing, radius } from '../../src/theme/spacing';
+import SkeletonTree from '../../src/components/SkeletonTree';
 
 export default function SkeletonScreen() {
-  const router = useRouter();
   const selectedSystem = useAppStore((s) => s.selectedSystem);
   const setSelectedSystem = useAppStore((s) => s.setSelectedSystem);
   const skeletonRefreshKey = useAppStore((s) => s.skeletonRefreshKey);
@@ -17,130 +20,152 @@ export default function SkeletonScreen() {
     <View style={styles.container}>
       {/* System selector */}
       <View style={styles.systemBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {SYSTEMS.map((sys) => (
-            <TouchableOpacity
-              key={sys}
-              style={[styles.systemChip, selectedSystem === sys && styles.systemChipActive]}
-              onPress={() => setSelectedSystem(sys)}
-            >
-              <Text style={[styles.systemChipText, selectedSystem === sys && styles.systemChipTextActive]}>
-                {sys}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.systemScroll}>
+          {SYSTEMS.map((sys) => {
+            const active = selectedSystem === sys;
+            return (
+              <TouchableOpacity
+                key={sys}
+                style={[styles.systemChip, active && styles.systemChipActive]}
+                onPress={() => setSelectedSystem(sys)}
+              >
+                <Text style={[styles.systemChipText, active && styles.systemChipTextActive]}>
+                  {sys}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Action bar: search + overview + graph */}
+      {/* Action bar */}
       <View style={styles.actionBar}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="搜索知识节点..."
-          placeholderTextColor="#9ca3af"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={16} color={ochreGray} style={{ marginRight: 6 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="搜索知识节点..."
+            placeholderTextColor={clayGray}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+        </View>
         {searchQuery ? (
           <TouchableOpacity
-            style={styles.searchBtn}
+            style={styles.clearBtn}
             onPress={() => { setSearchQuery(''); Keyboard.dismiss(); }}
           >
-            <Text style={styles.searchBtnText}>清除</Text>
+            <Ionicons name="close-circle" size={20} color={ochreGray} />
           </TouchableOpacity>
         ) : null}
         <Link href="/overview" asChild>
-          <TouchableOpacity style={styles.graphBtn}>
-            <Text style={styles.graphBtnText}>📋</Text>
+          <TouchableOpacity style={styles.iconBtn}>
+            <Ionicons name="book-outline" size={20} color={copper} />
           </TouchableOpacity>
         </Link>
         <Link href="/graph" asChild>
-          <TouchableOpacity style={styles.graphBtn}>
-            <Text style={styles.graphBtnText}>🕸</Text>
+          <TouchableOpacity style={styles.iconBtn}>
+            <Ionicons name="git-network-outline" size={20} color={copper} />
           </TouchableOpacity>
         </Link>
       </View>
 
-      {/* 入门指南入口 — prominent banner for new users */}
+      {/* Hero Banner */}
       <Link href="/overview" asChild>
-        <TouchableOpacity style={styles.introBanner} activeOpacity={0.85}>
-          <View style={styles.introBannerLeft}>
-            <Text style={styles.introBannerIcon}>📖</Text>
-            <View style={styles.introBannerTextWrap}>
-              <Text style={styles.introBannerTitle}>入门指南</Text>
-              <Text style={styles.introBannerSubtitle}>什么是模块化学习？3 分钟快速上手</Text>
+        <TouchableOpacity style={styles.heroBanner} activeOpacity={0.85}>
+          <View style={styles.heroLeft}>
+            <View style={styles.heroIconWrap}>
+              <Ionicons name="leaf-outline" size={22} color={copper} />
+            </View>
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.heroTitle}>入门指南</Text>
+              <Text style={styles.heroSubtitle}>把医学知识织成一张网</Text>
             </View>
           </View>
-          <Text style={styles.introBannerArrow}>→</Text>
+          <Ionicons name="chevron-forward" size={18} color={copper} />
         </TouchableOpacity>
       </Link>
 
-      {/* Skeleton tree — keyed by refreshKey to force remount after card save */}
+      {/* Skeleton tree */}
       <SkeletonTree key={`${selectedSystem}-${skeletonRefreshKey}`} systemName={selectedSystem} searchQuery={searchQuery} />
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1, backgroundColor: paperWhite },
+  // ── System selector ──
   systemBar: {
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    backgroundColor: jadeWhite,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: warmBorder,
   },
+  systemScroll: { paddingHorizontal: spacing.md },
   systemChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 18,
-    backgroundColor: '#f3f4f6',
-    marginRight: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: paperWhite,
+    marginRight: spacing.sm,
+    borderWidth: 0.5,
+    borderColor: warmBorder,
   },
-  systemChipActive: { backgroundColor: '#2563eb' },
-  systemChipText: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
-  systemChipTextActive: { color: '#fff', fontWeight: '600' },
+  systemChipActive: { backgroundColor: copper, borderColor: copper },
+  systemChipText: { fontSize: 14, fontWeight: '500', color: ochreGray },
+  systemChipTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  // ── Search ──
   actionBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 8, gap: 8,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm,
+    backgroundColor: jadeWhite,
+    borderBottomWidth: 0.5,
+    borderBottomColor: warmBorder,
+  },
+  searchWrap: {
+    flex: 1,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: paperWhite,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    height: 38,
+    borderWidth: 0.5,
+    borderColor: warmBorder,
   },
   searchInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: '#1f2937',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    flex: 1, fontSize: 15, color: inkColor, paddingVertical: 0,
   },
-  searchBtn: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 8,
+  clearBtn: { padding: 2 },
+  iconBtn: {
+    width: 38, height: 38,
+    borderRadius: radius.lg,
+    backgroundColor: paperWhite,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: warmBorder,
   },
-  searchBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  graphBtn: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: '#e5e7eb',
-  },
-  graphBtnText: { fontSize: 20 },
-  introBanner: {
+  // ── Hero banner ──
+  heroBanner: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    marginHorizontal: 16, marginTop: 12,
+    backgroundColor: jadeWhite,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
     paddingVertical: 14, paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#93c5fd',
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: copperBg,
+    ...shadows.sm,
   },
-  introBannerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  introBannerIcon: { fontSize: 28, marginRight: 12 },
-  introBannerTextWrap: { flex: 1 },
-  introBannerTitle: { fontSize: 16, fontWeight: '700', color: '#1e40af' },
-  introBannerSubtitle: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  introBannerArrow: { fontSize: 22, color: '#93c5fd', fontWeight: '700' },
+  heroLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  heroIconWrap: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: copperBg,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 12,
+  },
+  heroTextWrap: { flex: 1 },
+  heroTitle: { fontSize: 16, fontWeight: '700', color: inkColor },
+  heroSubtitle: { fontSize: 13, color: ochreGray, marginTop: 2 },
 });

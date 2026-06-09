@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { readFile, listDirRecursive, ensureInit } from '../lib/fileStore';
-import { useAppStore, LAYER_ICONS, type Layer } from '../store/useAppStore';
+import { useAppStore, LAYER_ICONS, LAYER_COLORS, type Layer } from '../store/useAppStore';
 
 interface Props {
   systemName: string;
@@ -21,13 +21,14 @@ interface TreeNode {
 
 const LAYER_NAMES: Layer[] = ['基础', '桥梁', '临床', '前沿'];
 
-export default function SkeletonTree({ systemName, searchQuery }: Props) {
+export default React.memo(function SkeletonTree({ systemName, searchQuery }: Props) {
   const router = useRouter();
   const refreshKey = useAppStore((s) => s.skeletonRefreshKey);
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [flat, setFlat] = useState(false);
 
   useEffect(() => {
     loadSkeleton();
@@ -49,7 +50,8 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
 
   async function parseNodes(raw: string) {
     const result: TreeNode[] = [];
-    let currentLayer = -1;
+    let currentLayer = 0;
+    let hasLayerHeaders = false;
     const lines = raw.split('\n');
 
     // Build set of filled card titles from existing card files
@@ -64,23 +66,23 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
 
       // Detect layer headers: "## 🟢 基础层（...）" or "> 🟢 **基础层**"
       if (trimmed.includes('🟢') && (trimmed.includes('基础层') || trimmed.includes('基础'))) {
-        currentLayer = 0;
+        currentLayer = 0; hasLayerHeaders = true;
         continue;
       }
       if (trimmed.includes('🟡') && (trimmed.includes('桥梁层') || trimmed.includes('桥梁'))) {
-        currentLayer = 1;
+        currentLayer = 1; hasLayerHeaders = true;
         continue;
       }
       if (trimmed.includes('🔴') && (trimmed.includes('临床层') || trimmed.includes('临床'))) {
-        currentLayer = 2;
+        currentLayer = 2; hasLayerHeaders = true;
         continue;
       }
       if (trimmed.includes('🔵') && (trimmed.includes('前沿层') || trimmed.includes('前沿'))) {
-        currentLayer = 3;
+        currentLayer = 3; hasLayerHeaders = true;
         continue;
       }
 
-      if (currentLayer < 0) continue;
+      if (!hasLayerHeaders && currentLayer < 0) currentLayer = 0;
 
       // 📖 speed anchor line — associate with the previous node
       if (trimmed.startsWith('📖')) {
@@ -138,6 +140,7 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
     }
 
     setNodes(result);
+    setFlat(!hasLayerHeaders);
   }
 
   const handleNodePress = useCallback((node: TreeNode) => {
@@ -155,7 +158,7 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#C8865D" />
         <Text style={styles.loadingText}>加载骨架...</Text>
       </View>
     );
@@ -179,6 +182,54 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
     nodesByLayer[i] = filtered.filter(n => n.layer === i);
   }
 
+  // Render node row
+  const renderNode = (node: TreeNode, nIdx: number) => (
+    <TouchableOpacity
+      key={nIdx}
+      style={styles.nodeRow}
+      onPress={() => handleNodePress(node)}
+    >
+      <View style={[
+        styles.nodeDot,
+        node.isFilled ? styles.nodeDotFilled : styles.nodeDotEmpty,
+        node.isSpeedAnchor && styles.nodeDotSpeed,
+      ]} />
+      <View style={styles.nodeTextWrap}>
+        <Text style={[
+          styles.nodeText,
+          node.isFilled && styles.nodeTextFilled,
+          node.isSpeedAnchor && styles.nodeTextSpeed,
+        ]} numberOfLines={2}>
+          {node.text}
+        </Text>
+        {node.isFilled && (
+          <Text style={styles.filledBadge}> 已填</Text>
+        )}
+        {node.isSpeedAnchor && (
+          <Text style={styles.speedBadge}>📖</Text>
+        )}
+      </View>
+      <Text style={styles.arrow}>›</Text>
+    </TouchableOpacity>
+  );
+
+  // Flat mode: simple list without layer accordion
+  if (flat) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.layerSection} testID="glass">
+          <View style={styles.nodesList}>
+            {filtered.length === 0 ? (
+              <Text style={styles.emptyLayer}>暂无节点</Text>
+            ) : (
+              filtered.map((node, nIdx) => renderNode(node, nIdx))
+            )}
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {LAYER_NAMES.map((layerName, layerIdx) => {
@@ -192,7 +243,7 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
               onPress={() => toggleCollapse(layerIdx)}
               activeOpacity={0.6}
             >
-              <Text style={styles.layerIcon}>{LAYER_ICONS[layerName]}</Text>
+              <View style={[styles.layerDot, { backgroundColor: LAYER_COLORS[layerName] }]} />
               <Text style={styles.layerTitle}>{layerName}层</Text>
               <Text style={styles.nodeCount}>
                 {layerNodes.filter(n => n.isFilled).length}/{layerNodes.length} 已填
@@ -205,35 +256,7 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
                 {layerNodes.length === 0 ? (
                   <Text style={styles.emptyLayer}>暂无节点</Text>
                 ) : (
-                  layerNodes.map((node, nIdx) => (
-                    <TouchableOpacity
-                      key={nIdx}
-                      style={styles.nodeRow}
-                      onPress={() => handleNodePress(node)}
-                    >
-                      <View style={[
-                        styles.nodeDot,
-                        node.isFilled ? styles.nodeDotFilled : styles.nodeDotEmpty,
-                        node.isSpeedAnchor && styles.nodeDotSpeed,
-                      ]} />
-                      <View style={styles.nodeTextWrap}>
-                        <Text style={[
-                          styles.nodeText,
-                          node.isFilled && styles.nodeTextFilled,
-                          node.isSpeedAnchor && styles.nodeTextSpeed,
-                        ]} numberOfLines={2}>
-                          {node.text}
-                        </Text>
-                        {node.isFilled && (
-                          <Text style={styles.filledBadge}> 已填</Text>
-                        )}
-                        {node.isSpeedAnchor && (
-                          <Text style={styles.speedBadge}>📖</Text>
-                        )}
-                      </View>
-                      <Text style={styles.arrow}>›</Text>
-                    </TouchableOpacity>
-                  ))
+                  layerNodes.map((node, nIdx) => renderNode(node, nIdx))
                 )}
               </View>
             )}
@@ -242,56 +265,58 @@ export default function SkeletonTree({ systemName, searchQuery }: Props) {
       })}
     </ScrollView>
   );
-}
+});
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 100 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
-  loadingText: { marginTop: 8, color: '#6b7280', fontSize: 14 },
-  errorText: { fontSize: 16, color: '#ef4444' },
+  loadingText: { marginTop: 8, color: '#5A6980', fontSize: 14 },
+  errorText: { fontSize: 16, color: '#FF3D71' },
 
   layerSection: {
-    marginBottom: 12,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    marginBottom: 16,
+    backgroundColor: 'rgba(22,27,34,0.70)',
+    borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    borderWidth: 0.5, borderColor: 'rgba(200,164,92,0.06)',
   },
   layerHeader: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 12, paddingHorizontal: 14,
-    backgroundColor: '#fafafa',
+    paddingVertical: 14, paddingHorizontal: 16,
+    backgroundColor: 'rgba(28,35,48,0.60)',
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(200,164,92,0.06)',
   },
-  layerIcon: { fontSize: 16, marginRight: 8 },
-  layerTitle: { fontSize: 15, fontWeight: '700', color: '#1f2937', flex: 1 },
-  nodeCount: { fontSize: 11, color: '#9ca3af', marginRight: 8 },
-  chevron: { fontSize: 12, color: '#6b7280' },
+  layerIcon: { fontSize: 14, marginRight: 8, width: 20 },
+  layerDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  layerTitle: { fontSize: 17, fontWeight: '700', color: '#E8EDF5', flex: 1 },
+  nodeCount: { fontSize: 12, color: '#5A6980', marginRight: 10 },
+  chevron: { fontSize: 12, color: '#5A6980' },
   nodesList: { paddingVertical: 4 },
-  emptyLayer: { padding: 16, fontSize: 13, color: '#d1d5db', textAlign: 'center' },
+  emptyLayer: { padding: 20, fontSize: 14, color: '#5A6980', textAlign: 'center' },
 
   nodeRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 10, paddingHorizontal: 14,
-    borderBottomWidth: 0.5, borderBottomColor: '#f3f4f6',
+    paddingVertical: 12, paddingHorizontal: 16,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)',
   },
   nodeDot: {
-    width: 8, height: 8, borderRadius: 4,
-    marginRight: 10,
+    width: 10, height: 10, borderRadius: 5,
+    marginRight: 12,
   },
-  nodeDotFilled: { backgroundColor: '#2563eb' },
-  nodeDotEmpty: { backgroundColor: '#d1d5db' },
-  nodeDotSpeed: { backgroundColor: '#7c3aed', borderRadius: 2, width: 7, height: 7 },
+  nodeDotFilled: { backgroundColor: '#00FF88' },
+  nodeDotEmpty: { backgroundColor: '#2D3A4D' },
+  nodeDotSpeed: { backgroundColor: '#FFB800', borderRadius: 2, width: 8, height: 8 },
   nodeTextWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
-  nodeText: { fontSize: 14, color: '#9ca3af', lineHeight: 20 },
-  nodeTextFilled: { color: '#2563eb', fontWeight: '600' },
-  nodeTextSpeed: { color: '#7c3aed', fontSize: 13, fontStyle: 'italic' },
+  nodeText: { fontSize: 17, color: '#5A6980', lineHeight: 22 },
+  nodeTextFilled: { color: '#E8EDF5', fontWeight: '700' },
+  nodeTextSpeed: { color: '#FFB800', fontSize: 15, fontStyle: 'italic' },
   filledBadge: {
-    fontSize: 10, color: '#fff', fontWeight: '700',
-    backgroundColor: '#22c55e',
-    paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8,
-    marginLeft: 6, overflow: 'hidden',
+    fontSize: 11, color: '#00FF88', fontWeight: '700',
+    backgroundColor: 'rgba(0,255,136,0.10)',
+    paddingHorizontal: 8, paddingVertical: 1, borderRadius: 8,
+    marginLeft: 8, overflow: 'hidden',
   },
-  speedBadge: { fontSize: 12, marginLeft: 4 },
-  arrow: { fontSize: 18, color: '#d1d5db', marginLeft: 4 },
+  speedBadge: { fontSize: 13, marginLeft: 6 },
+  arrow: { fontSize: 20, color: '#B8A99A', marginLeft: 6 },
 });

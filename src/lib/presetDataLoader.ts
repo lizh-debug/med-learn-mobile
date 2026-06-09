@@ -1,9 +1,7 @@
 // Loads preset data on first launch.
-// Native: writes real files via expo-file-system
-// Web: loads into in-memory store
+// Uses dynamic import so Metro/webpack splits presets into a separate chunk
+// — reduces main bundle size and correctly resolves baseUrl paths.
 
-import { Platform } from 'react-native';
-import { PRESET_FILES } from './presetDataContent';
 import { memWrite } from './fileStore';
 
 let copied = false;
@@ -11,13 +9,16 @@ let copied = false;
 export async function loadPresets(platform: 'web' | 'native'): Promise<void> {
   if (copied) return;
 
+  // Dynamic import — Metro/webpack creates a separate chunk, loaded on demand.
+  // Path resolution (including baseUrl) is handled automatically by the bundler.
+  const mod = await import('./presetDataContent');
+  const files = mod.PRESET_FILES;
+
   if (platform === 'web') {
-    // Load all presets into in-memory store
-    for (const file of PRESET_FILES) {
+    for (const file of files) {
       memWrite(file.path, file.content);
     }
   } else {
-    // Native: write real files
     const fs = await import('expo-file-system');
     const dataDir = new fs.Directory(fs.Paths.document, 'data');
 
@@ -25,7 +26,7 @@ export async function loadPresets(platform: 'web' | 'native'): Promise<void> {
       dataDir.create();
     }
 
-    for (const file of PRESET_FILES) {
+    for (const file of files) {
       try {
         const parts = file.path.replace(/\\/g, '/').split('/');
         const destFile = new fs.File(fs.Paths.document, 'data', ...parts);

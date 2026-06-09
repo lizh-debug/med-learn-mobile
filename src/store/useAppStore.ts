@@ -31,6 +31,12 @@ interface AppState {
   // Skeleton refresh trigger (incremented after card save)
   skeletonRefreshKey: number;
 
+  // Pinned card paths for 今日待办
+  pinnedCards: string[];
+
+  // Pending navigation target (set by AI tools, consumed by _layout.tsx)
+  pendingNavigation: string | null;
+
   // Card being edited (set before navigating to edit screen)
   editingCardPath: string | null;
 
@@ -44,6 +50,8 @@ interface AppState {
   setAnchorCategory: (cat: '症状' | '体征' | '检查异常') => void;
   triggerSkeletonRefresh: () => void;
   setEditingCardPath: (path: string | null) => void;
+  setPendingNavigation: (target: string | null) => void;
+  togglePinnedCard: (path: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -54,6 +62,8 @@ export const useAppStore = create<AppState>((set) => ({
   anchorCategory: '症状',
   skeletonRefreshKey: 0,
   editingCardPath: null,
+  pinnedCards: [],
+  pendingNavigation: null,
 
   setToday: (date) => set({ today: date }),
   setSelectedSystem: (system) => set({ selectedSystem: system }),
@@ -72,6 +82,12 @@ export const useAppStore = create<AppState>((set) => ({
   setAnchorCategory: (cat) => set({ anchorCategory: cat }),
   triggerSkeletonRefresh: () => set((s) => ({ skeletonRefreshKey: s.skeletonRefreshKey + 1 })),
   setEditingCardPath: (path) => set({ editingCardPath: path }),
+  setPendingNavigation: (target) => set({ pendingNavigation: target }),
+  togglePinnedCard: (path) => set((s) => ({
+    pinnedCards: s.pinnedCards.includes(path)
+      ? s.pinnedCards.filter(p => p !== path)
+      : [...s.pinnedCards, path],
+  })),
 }));
 
 function formatDate(d: Date): string {
@@ -92,22 +108,23 @@ export const SYSTEMS = [
   '免疫系统',
   '运动系统',
   '生殖系统',
+  '诊断公式',
 ] as const;
 
 export const LAYERS: Layer[] = ['基础', '桥梁', '临床', '前沿'];
 
 export const LAYER_COLORS: Record<Layer, string> = {
-  '基础': '#22c55e', // green
-  '桥梁': '#eab308', // yellow
-  '临床': '#ef4444', // red
-  '前沿': '#3b82f6', // blue
+  '基础': '#4CAF84', // 翠绿 (desaturated green)
+  '桥梁': '#E8953A', // 琥珀 (desaturated orange)
+  '临床': '#D4685A', // 赭红 (desaturated red)
+  '前沿': '#5B8DAB', // 靛蓝 (desaturated blue)
 };
 
 export const LAYER_ICONS: Record<Layer, string> = {
-  '基础': '🟢',
-  '桥梁': '🟡',
-  '临床': '🔴',
-  '前沿': '🔵',
+  '基础': '●',
+  '桥梁': '●',
+  '临床': '●',
+  '前沿': '●',
 };
 
 export const ANCHOR_CATEGORIES = {

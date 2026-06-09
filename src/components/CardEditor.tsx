@@ -2,61 +2,80 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Keyboard,
+  TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { serializeMarkdown, parseFrontmatter } from '../lib/markdownParser';
-import { writeFile, readFile, listDirRecursive, ensureInit } from '../lib/fileStore';
+import { writeFile, readFile } from '../lib/fileStore';
 import { useAppStore, LAYERS, SYSTEMS } from '../store/useAppStore';
+import { useAutocomplete, type CardRef } from '../lib/useAutocomplete';
 
-// ---- Field component ----
-function EditorField({
-  label, hint, value, fieldName, multiline,
-  onFieldChange, showLinkHint, onTriggerLink,
+// ── Accordion Section ──
+function AccordionSection({
+  num, icon, label, hint, value, fieldName, isActive, onToggle,
+  onFieldChange, showLinkHint, onTriggerLink, setter, compact,
 }: {
-  label: string; hint: string; value: string; fieldName: string;
-  onFieldChange: (text: string, field: string) => void; multiline?: boolean;
+  num: string; icon: string; label: string; hint: string; value: string; fieldName: string;
+  isActive: boolean; onToggle: () => void;
+  onFieldChange: (text: string, field: string, setter?: (t: string) => void) => void;
   showLinkHint?: boolean;
   onTriggerLink?: (field: string) => void;
+  setter?: (t: string) => void;
+  compact?: boolean;
 }) {
   const lastText = useRef('');
 
   function handleChange(text: string) {
     if (text === lastText.current) return;
     lastText.current = text;
-    onFieldChange(text, fieldName);
+    onFieldChange(text, fieldName, setter);
   }
 
+  const preview = value ? value.split('\n')[0].slice(0, 50) + (value.length > 50 ? '…' : '') : '';
+
   return (
-    <View style={styles.fieldCard}>
-      <View style={styles.labelRow}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {onTriggerLink && (
-          <TouchableOpacity
-            style={styles.linkTrigger}
-            onPress={() => onTriggerLink(fieldName)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.linkTriggerText}>🔗</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
-      <TextInput
-        style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
-        value={value}
-        onChangeText={handleChange}
-        onChange={(e) => {
-          const text = (e.nativeEvent as any).text;
-          if (typeof text === 'string') handleChange(text);
-        }}
-        placeholder=""
-        placeholderTextColor="#c7c9cd"
-        multiline={multiline}
-        textAlignVertical="top"
-      />
-      {showLinkHint && (
-        <Text style={styles.linkHint}>输入 [[ 可链接到已有卡片</Text>
+    <View style={[styles.sectionCard, isActive && styles.sectionCardActive]}>
+      <TouchableOpacity style={styles.sectionHeader} onPress={onToggle} activeOpacity={0.6}>
+        <View style={styles.sectionHeaderLeft}>
+          <Text style={styles.sectionIcon}>{icon}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionLabel}>{label}</Text>
+            {!isActive && preview ? (
+              <Text style={styles.sectionPreview} numberOfLines={1}>{preview}</Text>
+            ) : !isActive ? (
+              <Text style={styles.sectionHint}>{hint}</Text>
+            ) : null}
+          </View>
+        </View>
+        <View style={styles.sectionHeaderRight}>
+          {onTriggerLink && isActive && (
+            <TouchableOpacity style={styles.linkBtn} onPress={() => onTriggerLink(fieldName)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.linkBtnText}>🔗</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.sectionChevron}>{isActive ? '▲' : '▼'}</Text>
+        </View>
+      </TouchableOpacity>
+      {isActive && (
+        <View style={styles.sectionBody}>
+          <TextInput
+            style={[styles.sectionInput, compact ? styles.sectionInputCompact : styles.sectionInputFull]}
+            value={value}
+            onChangeText={handleChange}
+            onChange={(e) => {
+              const text = (e.nativeEvent as any).text;
+              if (typeof text === 'string') handleChange(text);
+            }}
+            placeholder={hint}
+            placeholderTextColor="#3A4860"
+            multiline
+            textAlignVertical="top"
+            autoFocus
+          />
+          {showLinkHint && (
+            <Text style={styles.linkHint}>输入 [[ 可链接到已有卡片</Text>
+          )}
+        </View>
       )}
     </View>
   );
@@ -93,107 +112,44 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
   const [q6Treat, setQ6Treat] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
 
-  // Autocomplete
-  const [allCards, setAllCards] = useState<Array<{ path: string; title: string; layer: string; system: string }>>([]);
-  const [showAutocomplete, setShowAutocomplete] = useState(false);
-  const [acQuery, setAcQuery] = useState('');
-  const [acField, setAcField] = useState('');
-  const [collapsedSystems, setCollapsedSystems] = useState<Record<string, boolean>>({});
-  const fieldValues = useRef<Record<string, string>>({ q1: '', q3: '', q4: '', q5: '', q6sym: '', q6sign: '', q6exam: '', q6treat: '' });
+  function toggleSection(key: string) {
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  // Autocomplete — shared hook
+  const {
+    allCards, showAutocomplete, acQuery, acField, collapsedSystems, setCollapsedSystems,
+    fieldValues, onFieldChange: acOnFieldChange, handleTriggerLink: acHandleTriggerLink,
+    applyAutocomplete: acApplyAutocomplete, closeAutocomplete, sysLayerGroups,
+  } = useAutocomplete();
+
+  const fieldSetters: Record<string, (t: string) => void> = {
+    q1: setQ1, q3: setQ3, q4: setQ4, q5: setQ5,
+    q6sym: setQ6Sym, q6sign: setQ6Sign, q6exam: setQ6Exam, q6treat: setQ6Treat,
+  };
+
+  function onFieldChange(text: string, fieldName: string, setter?: (t: string) => void) {
+    acOnFieldChange(text, fieldName, setter || fieldSetters[fieldName]);
+  }
+
+  function handleTriggerLink(fieldName: string) {
+    acHandleTriggerLink(fieldName);
+  }
+
+  function applyAutocomplete(card: CardRef) {
+    acApplyAutocomplete(card, fieldSetters[acField]);
+  }
 
   useEffect(() => {
-    loadCards();
     if (existingPath) loadExisting();
     else loadTemplate();
   }, [existingPath, prefillTitle]);
-
-  async function loadCards() {
-    try {
-      await ensureInit();
-      const cards: Array<{ path: string; title: string; layer: string; system: string }> = [];
-      const seen = new Set<string>();
-
-      // 1. All card files — extract layer + system from frontmatter
-      const cardFiles = listDirRecursive('卡片');
-      for (const file of cardFiles) {
-        try {
-          const content = await readFile(file);
-          const { frontmatter, body } = parseFrontmatter(content);
-          const t = (frontmatter.birthplace as string) || body.match(/^#\s+(.+)$/m)?.[1] || file.split('/').pop()?.replace('.md', '') || '';
-          const lyr = (frontmatter.layer as string) || '';
-          const sys = (frontmatter.system as string) || file.split('/')[1] || '';
-          cards.push({ path: file, title: t, layer: lyr, system: sys });
-          seen.add(file.replace(/\.md$/, ''));
-        } catch { /* skip */ }
-      }
-
-      // 2. Skeleton nodes (unfilled) — read all system skeleton files
-      const skelFiles = listDirRecursive('骨架');
-      for (const skelFile of skelFiles) {
-        try {
-          const sysName = skelFile.split('/').pop()?.replace('.md', '') || '';
-          const content = await readFile(skelFile);
-          const lines = content.split('\n');
-          let currentLayer = '';
-          for (const line of lines) {
-            // Track layer
-            if (line.includes('🟢') && (line.includes('基础层') || line.includes('基础'))) currentLayer = '基础';
-            else if (line.includes('🟡') && (line.includes('桥梁层') || line.includes('桥梁'))) currentLayer = '桥梁';
-            else if (line.includes('🔴') && (line.includes('临床层') || line.includes('临床'))) currentLayer = '临床';
-            else if (line.includes('🔵') && (line.includes('前沿层') || line.includes('前沿'))) currentLayer = '前沿';
-
-            // Extract wiki links from skeleton lines
-            const linkMatch = line.match(/\[\[([^\]]+)\]\]/);
-            if (!linkMatch) continue;
-
-            const inner = linkMatch[1];
-            const pipeIdx = inner.indexOf('|');
-            const linkPath = pipeIdx !== -1 ? inner.slice(0, pipeIdx).trim() : inner.trim();
-            let displayName: string;
-
-            // Format: "### 节点名 → [[path|已填]]" — extract name before →
-            const arrowMatch = line.match(/^#+\s*(.+?)\s*→\s*\[\[/);
-            if (arrowMatch) {
-              displayName = arrowMatch[1].trim();
-            } else if (pipeIdx !== -1) {
-              displayName = inner.slice(pipeIdx + 1).trim().replace(/←\s*已填/, '').trim();
-            } else {
-              displayName = linkPath.split('/').pop() || linkPath;
-            }
-            if (!displayName || displayName === '已填') {
-              displayName = linkPath.split('/').pop() || linkPath;
-            }
-
-            // Skip if already has a card
-            const cleanPath = linkPath.replace(/\.md$/, '');
-            if (seen.has(cleanPath)) continue;
-            seen.add(cleanPath);
-
-            cards.push({
-              path: cleanPath,
-              title: displayName,
-              layer: currentLayer,
-              system: sysName,
-            });
-          }
-        } catch { /* skip */ }
-      }
-
-      // 3. Anchor files
-      const anchorFiles = listDirRecursive('临床锚点');
-      for (const file of anchorFiles) {
-        try {
-          const name = file.split('/').pop()?.replace('.md', '') || '';
-          if (name && name !== '临床锚点模板') {
-            cards.push({ path: file, title: `⚓ ${name}`, layer: '', system: '⚓ 临床锚点' });
-          }
-        } catch { /* skip */ }
-      }
-
-      setAllCards(cards);
-    } catch (e) { console.error('loadCards failed:', e); }
-  }
 
   async function loadExisting() {
     try {
@@ -274,148 +230,6 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
       q6Treat ? `- 治疗：${q6Treat}` : '- 治疗：',
     ].join('\n');
   }
-
-  // ---- Field change handler: update state + detect [[ ----
-  function onFieldChange(text: string, fieldName: string) {
-    const setters: Record<string, (t: string) => void> = {
-      q1: setQ1, q3: setQ3, q4: setQ4, q5: setQ5,
-      q6sym: setQ6Sym, q6sign: setQ6Sign, q6exam: setQ6Exam, q6treat: setQ6Treat,
-    };
-    setters[fieldName]?.(text);
-    fieldValues.current[fieldName] = text;
-
-    // Check for unclosed [[
-    const lastOpen = text.lastIndexOf('[[');
-    if (lastOpen === -1 || text.indexOf(']]', lastOpen) !== -1) {
-      setShowAutocomplete(false);
-      return;
-    }
-    setAcQuery(text.slice(lastOpen + 2));
-    setAcField(fieldName);
-    setShowAutocomplete(true);
-  }
-
-  function handleTriggerLink(fieldName: string) {
-    Keyboard.dismiss();
-    setAcQuery('');
-    setAcField(fieldName);
-    setShowAutocomplete(true);
-  }
-
-  function applyAutocomplete(card: { path: string; title: string }) {
-    setShowAutocomplete(false);
-
-    const cleanPath = card.path.replace(/\.md$/, '');
-    const replaceText = `[[${cleanPath}|${card.title}]]`;
-
-    const currentText = fieldValues.current[acField] || '';
-
-    const setters: Record<string, (t: string) => void> = {
-      q1: setQ1, q3: setQ3, q4: setQ4, q5: setQ5,
-      q6sym: setQ6Sym, q6sign: setQ6Sign, q6exam: setQ6Exam, q6treat: setQ6Treat,
-    };
-    const setter = setters[acField];
-    if (setter) {
-      // If there's an unclosed [[, replace it; otherwise append
-      const lastOpen = currentText.lastIndexOf('[[');
-      const hasClose = lastOpen !== -1 && currentText.indexOf(']]', lastOpen) !== -1;
-      let newText: string;
-      if (lastOpen !== -1 && !hasClose) {
-        // Replace the unclosed [[ with the full link
-        newText = currentText.slice(0, lastOpen) + replaceText;
-      } else {
-        // Append: add newline if field has content
-        const sep = currentText ? '\n' : '';
-        newText = currentText + sep + replaceText;
-      }
-      setter(newText);
-      fieldValues.current[acField] = newText;
-    }
-  }
-
-  const LAYER_LABELS: Record<string, string> = {
-    '基础': '🟢 基础层', '桥梁': '🟡 桥梁层', '临床': '🔴 临床层', '前沿': '🔵 前沿层',
-  };
-  const LAYER_ORDER = ['基础', '桥梁', '临床', '前沿'];
-
-  // Group cards by system → layer (mirrors skeleton tree hierarchy)
-  const sysLayerGroups = (() => {
-    const q = acQuery.toLowerCase();
-    const matches = allCards.filter(c =>
-      c.title.toLowerCase().includes(q) || c.path.toLowerCase().includes(q)
-    );
-
-    const cardItems = matches.filter(c => c.path.startsWith('卡片/'));
-    const anchorItems = matches.filter(c => c.path.startsWith('临床锚点/'));
-
-    // Deduplicate
-    const seen = new Set<string>();
-    const dedupe = <T extends typeof allCards>(items: T) => items.filter(c => {
-      if (seen.has(c.path)) return false;
-      seen.add(c.path);
-      return true;
-    });
-
-    // Group cards: system → layer → cards
-    const sysMap = new Map<string, Map<string, typeof allCards>>();
-    for (const c of dedupe(cardItems)) {
-      const sys = c.system || c.path.split('/')[1] || '其他';
-      if (!sysMap.has(sys)) sysMap.set(sys, new Map());
-      const layerMap = sysMap.get(sys)!;
-      const lyr = c.layer || '其他';
-      if (!layerMap.has(lyr)) layerMap.set(lyr, []);
-      layerMap.get(lyr)!.push(c);
-    }
-
-    // Sort by SYSTEMS order, current system first
-    const sysNames = Array.from(sysMap.keys()).sort((a, b) => {
-      if (a === system) return -1;
-      if (b === system) return 1;
-      const ai = SYSTEMS.indexOf(a as any);
-      const bi = SYSTEMS.indexOf(b as any);
-      if (ai === -1 && bi === -1) return a.localeCompare(b);
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    });
-
-    const result: Array<{
-      key: string; system: string;
-      layers: Array<{ layer: string; label: string; cards: typeof allCards }>;
-    }> = [];
-
-    for (const sysName of sysNames) {
-      const layerMap = sysMap.get(sysName)!;
-      const layers: Array<{ layer: string; label: string; cards: typeof allCards }> = [];
-
-      // Sort layers by predefined order
-      const layerNames = Array.from(layerMap.keys()).sort((a, b) => {
-        const ai = LAYER_ORDER.indexOf(a);
-        const bi = LAYER_ORDER.indexOf(b);
-        if (ai === -1 && bi === -1) return a.localeCompare(b);
-        if (ai === -1) return 1;
-        if (bi === -1) return -1;
-        return ai - bi;
-      });
-
-      for (const lyr of layerNames) {
-        const label = LAYER_LABELS[lyr] || lyr;
-        layers.push({ layer: lyr, label, cards: layerMap.get(lyr)! });
-      }
-
-      result.push({ key: `sys-${sysName}`, system: sysName, layers });
-    }
-
-    // Anchor group (no layer grouping)
-    if (anchorItems.length > 0) {
-      result.push({
-        key: 'anchor', system: '⚓ 临床锚点',
-        layers: [{ layer: '', label: '', cards: dedupe(anchorItems) }],
-      });
-    }
-
-    return result.filter(g => g.layers.some(l => l.cards.length > 0));
-  })();
 
   // ---- Save ----
   async function handleSave() {
@@ -524,27 +338,24 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)/skeleton')} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← 返回</Text>
-          </TouchableOpacity>
           <Text style={styles.pageTitle}>{existingPath ? '编辑卡片' : '新卡片'}</Text>
         </View>
         <Text style={styles.pageHint}>★ 在 3~6 问题点击右上角 🔗 按钮即可建立知识关联，反向链接自动生成</Text>
 
         {/* Title */}
-        <View style={styles.fieldCard}>
+        <View style={styles.fieldCard} testID="glass">
           <Text style={styles.fieldLabel}>标题</Text>
           <TextInput
             style={styles.titleInput}
             value={title}
             onChangeText={setTitle}
             placeholder=""
-            placeholderTextColor="#c7c9cd"
+            placeholderTextColor="#5A6980"
           />
         </View>
 
         {/* System + Layer picker — compact row */}
-        <View style={styles.pickerCard}>
+        <View style={styles.pickerCard} testID="glass">
           <Text style={styles.fieldLabel}>系统 & 层</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
             {SYSTEMS.map((s) => (
@@ -553,8 +364,8 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
                 style={[styles.pickerChip, system === s && styles.pickerChipActive]}
                 onPress={() => setSystem(s)}
               >
-                <Text style={[styles.pickerChipText, system === s && styles.pickerChipTextActive]}>
-                  {s.length > 4 ? s.slice(0, 3) : s}
+                <Text style={[styles.pickerChipText, system === s && styles.pickerChipTextActive]} numberOfLines={1}>
+                  {s.replace('系统', '').replace('诊断公式', '诊断')}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -572,21 +383,83 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
           </View>
         </View>
 
-        {/* 6 fields */}
-        <EditorField label="1. 一句话概括" hint="用一句话说清这个知识节点的本质" value={q1} fieldName="q1" onFieldChange={onFieldChange} multiline onTriggerLink={handleTriggerLink} />
-        <EditorField label="2. 定位（哪门课）" hint="如：病理生理学" value={q2Course} fieldName="q2" onFieldChange={(t) => setQ2Course(t)} />
-        <EditorField label="3. 踩在什么上面" hint="- [[前置知识1]]&#10;- [[前置知识2]]" value={q3} fieldName="q3" onFieldChange={onFieldChange} multiline showLinkHint onTriggerLink={handleTriggerLink} />
-        <EditorField label="4. 通向哪里" hint="- [[后续知识1]]&#10;- [[后续知识2]]" value={q4} fieldName="q4" onFieldChange={onFieldChange} multiline showLinkHint onTriggerLink={handleTriggerLink} />
-        <EditorField label="5. 横向定位（考试核心）" hint="- [[同课知识点]] — 在课本中的定位？与前后章节的逻辑关系？" value={q5} fieldName="q5" onFieldChange={onFieldChange} multiline showLinkHint onTriggerLink={handleTriggerLink} />
+        {/* 6 sections — accordion style */}
+        <AccordionSection
+          num="1" icon="💡" label="一句话概括"
+          hint="用一句话说清这个知识节点的本质"
+          value={q1} fieldName="q1"
+          isActive={openSections.has('q1')}
+          onToggle={() => toggleSection('q1')}
+          onFieldChange={onFieldChange} setter={setQ1}
+          onTriggerLink={handleTriggerLink}
+        />
+        <AccordionSection
+          num="2" icon="📍" label="定位（哪门课）"
+          hint="如：病理生理学"
+          value={q2Course} fieldName="q2"
+          isActive={openSections.has('q2')}
+          onToggle={() => toggleSection('q2')}
+          onFieldChange={(t: string) => setQ2Course(t)}
+        />
+        <AccordionSection
+          num="3" icon="⬇️" label="踩在什么上面"
+          hint="前置知识，每行一条 [[wiki链接]]"
+          value={q3} fieldName="q3"
+          isActive={openSections.has('q3')}
+          onToggle={() => toggleSection('q3')}
+          onFieldChange={onFieldChange} setter={setQ3} showLinkHint
+          onTriggerLink={handleTriggerLink}
+        />
+        <AccordionSection
+          num="4" icon="⬆️" label="通向哪里"
+          hint="后续知识，每行一条 [[wiki链接]]"
+          value={q4} fieldName="q4"
+          isActive={openSections.has('q4')}
+          onToggle={() => toggleSection('q4')}
+          onFieldChange={onFieldChange} setter={setQ4} showLinkHint
+          onTriggerLink={handleTriggerLink}
+        />
+        <AccordionSection
+          num="5" icon="↔️" label="横向定位（考试核心）"
+          hint="同课知识点，课本定位，前后章节逻辑"
+          value={q5} fieldName="q5"
+          isActive={openSections.has('q5')}
+          onToggle={() => toggleSection('q5')}
+          onFieldChange={onFieldChange} setter={setQ5} showLinkHint
+          onTriggerLink={handleTriggerLink}
+        />
 
-        {/* Q6: 临床反向 — 4 sub-fields grouped */}
-        <View style={styles.fieldCard}>
-          <Text style={styles.fieldLabel}>6. 如果现在是医生（临床反向）</Text>
-          <Text style={styles.q6Hint}>按症状→体征→检查→治疗四个板块向前追溯</Text>
-          <EditorField label="症状" hint="这个病/知识对应什么症状？" value={q6Sym} fieldName="q6sym" onFieldChange={onFieldChange} multiline onTriggerLink={handleTriggerLink} />
-          <EditorField label="体征" hint="查体能发现什么？" value={q6Sign} fieldName="q6sign" onFieldChange={onFieldChange} multiline onTriggerLink={handleTriggerLink} />
-          <EditorField label="检查" hint="需要做什么辅助检查？" value={q6Exam} fieldName="q6exam" onFieldChange={onFieldChange} multiline onTriggerLink={handleTriggerLink} />
-          <EditorField label="治疗" hint="怎么治？核心原则和药物？" value={q6Treat} fieldName="q6treat" onFieldChange={onFieldChange} multiline onTriggerLink={handleTriggerLink} />
+        {/* Q6 */}
+        <View style={styles.q6Card}>
+          <Text style={styles.q6Title}>🩺 6. 如果现在是医生（临床反向）</Text>
+          <AccordionSection
+            num="6a" icon="🤒" label="症状"
+            hint="这个病/知识对应什么症状？" value={q6Sym} fieldName="q6sym"
+            isActive={openSections.has('q6sym')} onToggle={() => toggleSection('q6sym')}
+            onFieldChange={onFieldChange} setter={setQ6Sym} onTriggerLink={handleTriggerLink}
+            compact
+          />
+          <AccordionSection
+            num="6b" icon="🩺" label="体征"
+            hint="查体能发现什么？" value={q6Sign} fieldName="q6sign"
+            isActive={openSections.has('q6sign')} onToggle={() => toggleSection('q6sign')}
+            onFieldChange={onFieldChange} setter={setQ6Sign} onTriggerLink={handleTriggerLink}
+            compact
+          />
+          <AccordionSection
+            num="6c" icon="🔬" label="检查"
+            hint="需要做什么辅助检查？" value={q6Exam} fieldName="q6exam"
+            isActive={openSections.has('q6exam')} onToggle={() => toggleSection('q6exam')}
+            onFieldChange={onFieldChange} setter={setQ6Exam} onTriggerLink={handleTriggerLink}
+            compact
+          />
+          <AccordionSection
+            num="6d" icon="💊" label="治疗"
+            hint="怎么治？核心原则和药物？" value={q6Treat} fieldName="q6treat"
+            isActive={openSections.has('q6treat')} onToggle={() => toggleSection('q6treat')}
+            onFieldChange={onFieldChange} setter={setQ6Treat} onTriggerLink={handleTriggerLink}
+            compact
+          />
         </View>
 
         {/* Save */}
@@ -600,7 +473,7 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
           </Text>
         </TouchableOpacity>
 
-        <View style={{ height: 80 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </KeyboardAvoidingView>
 
@@ -609,7 +482,7 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
         <View style={styles.acOverlay}>
           <TouchableOpacity
             style={styles.acBackdrop}
-            onPress={() => setShowAutocomplete(false)}
+            onPress={closeAutocomplete}
             activeOpacity={1}
           />
           <View style={styles.acBox}>
@@ -679,7 +552,7 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
             </ScrollView>
             <TouchableOpacity
               style={styles.acClose}
-              onPress={() => setShowAutocomplete(false)}
+              onPress={closeAutocomplete}
             >
               <Text style={styles.acCloseText}>关闭</Text>
             </TouchableOpacity>
@@ -691,135 +564,145 @@ export default function CardEditor({ existingPath: propPath, prefillTitle, prefi
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#f8f9fa' },
+  flex: { flex: 1, backgroundColor: '#080B12' },
   container: { flex: 1 },
   content: { padding: 16 },
-  topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 12 },
-  backBtn: {
-    backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-  },
-  backBtnText: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  pageTitle: { fontSize: 22, fontWeight: '800', color: '#111' },
-  pageHint: { fontSize: 12, color: '#6b7280', marginBottom: 16, lineHeight: 18, fontStyle: 'italic' },
+  topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  pageTitle: { fontSize: 22, fontWeight: '700', color: '#E8EDF5' },
+  pageHint: { fontSize: 13, color: '#8E9DB5', marginBottom: 16, lineHeight: 18, fontStyle: 'italic' },
 
-  titleInput: { fontSize: 18, fontWeight: '600', color: '#111', padding: 0 },
+  titleInput: { fontSize: 18, fontWeight: '600', color: '#E8EDF5', padding: 0 },
 
-  // Cards
+  // Basic field card (title, pickers)
   fieldCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12,
-    shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 3, elevation: 1,
+    backgroundColor: '#0F1520', borderRadius: 14, padding: 16, marginBottom: 10,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.08)',
   },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  fieldLabel: {
-    fontSize: 12, fontWeight: '700', color: '#9ca3af',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-  linkTrigger: { padding: 4 },
-  linkTriggerText: { fontSize: 14 },
-  fieldHint: { fontSize: 11, color: '#b0b7c3', marginBottom: 6, fontStyle: 'italic', lineHeight: 16 },
-  fieldInput: { fontSize: 15, color: '#1f2937', padding: 0, minHeight: 28 },
-  fieldInputMulti: { minHeight: 56 },
-  linkHint: { fontSize: 10, color: '#c7c9cd', marginTop: 6, fontStyle: 'italic' },
-  q6Hint: { fontSize: 12, color: '#9ca3af', marginBottom: 10, fontStyle: 'italic' },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: '#00E5FF', textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  // Pickers
+  // ── Accordion sections ──
+  sectionCard: {
+    backgroundColor: '#0F1520', borderRadius: 14, marginBottom: 10,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.06)',
+    overflow: 'hidden',
+  },
+  sectionCardActive: {
+    borderColor: 'rgba(0,229,255,0.25)',
+  },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, paddingHorizontal: 16,
+  },
+  sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 },
+  sectionIcon: { fontSize: 18 },
+  sectionLabel: { fontSize: 15, fontWeight: '700', color: '#E8EDF5' },
+  sectionPreview: { fontSize: 12, color: '#8E9DB5', marginTop: 3 },
+  sectionHint: { fontSize: 12, color: '#3A4860', marginTop: 3, fontStyle: 'italic' },
+  sectionHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  linkBtn: { padding: 4 },
+  linkBtnText: { fontSize: 16 },
+  sectionChevron: { fontSize: 10, color: '#5A6980' },
+  sectionBody: { paddingHorizontal: 16, paddingBottom: 14 },
+  sectionInput: {
+    fontSize: 16, color: '#E8EDF5', padding: 14,
+    backgroundColor: '#141B26', borderRadius: 10,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.08)',
+  },
+  sectionInputFull: { minHeight: 140 },
+  sectionInputCompact: { minHeight: 80 },
+  linkHint: { fontSize: 12, color: '#5A6980', marginTop: 8, fontStyle: 'italic' },
+
+  // Q6 card
+  q6Card: {
+    backgroundColor: '#0F1520', borderRadius: 14, padding: 16, marginBottom: 10,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.08)',
+  },
+  q6Title: { fontSize: 16, fontWeight: '700', color: '#FF3D71', marginBottom: 10 },
+
   pickerCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12,
-    shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 3, elevation: 1,
+    backgroundColor: '#0F1520', borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.08)',
   },
-  pickerScroll: { marginBottom: 10 },
+  pickerScroll: { maxHeight: 42, marginBottom: 12 },
   pickerChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 14, backgroundColor: '#f3f4f6', marginRight: 6,
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16,
+    backgroundColor: '#1A2233', marginRight: 8,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.10)',
   },
-  pickerChipActive: { backgroundColor: '#2563eb' },
-  pickerChipText: { fontSize: 12, color: '#6b7280' },
-  pickerChipTextActive: { color: '#fff', fontWeight: '600' },
+  pickerChipActive: { backgroundColor: '#00E5FF', borderColor: '#00E5FF' },
+  pickerChipText: { fontSize: 14, color: '#8E9DB5', fontWeight: '500' },
+  pickerChipTextActive: { color: '#080B12', fontWeight: '600' },
   layerRow: { flexDirection: 'row', gap: 8 },
   layerChip: {
-    flex: 1, paddingVertical: 7, borderRadius: 10,
-    backgroundColor: '#f3f4f6', alignItems: 'center',
+    flex: 1, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: '#1A2233', alignItems: 'center',
   },
-  layerChipActive: { backgroundColor: '#e0e7ff' },
-  layerChipText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
-  layerChipTextActive: { color: '#2563eb' },
+  layerChipActive: { backgroundColor: 'rgba(0,229,255,0.10)' },
+  layerChipText: { fontSize: 14, fontWeight: '600', color: '#8E9DB5' },
+  layerChipTextActive: { color: '#00E5FF' },
 
-  // Save
   saveBtn: {
-    backgroundColor: '#2563eb', borderRadius: 14, paddingVertical: 16,
+    backgroundColor: '#00E5FF', borderRadius: 12, paddingVertical: 16,
     alignItems: 'center', marginTop: 8,
+    shadowColor: '#00E5FF', shadowOpacity: 0.35, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 6,
   },
-  saveBtnDone: { backgroundColor: '#22c55e' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  saveBtnDone: { backgroundColor: '#00FF88' },
+  saveBtnText: { color: '#080B12', fontSize: 16, fontWeight: '700' },
 
-  // Autocomplete — fixed overlay replaces Modal
   acOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 9999,
-    justifyContent: 'flex-end',
+    zIndex: 9999, justifyContent: 'flex-end',
   },
   acBackdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   acBox: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: '#0F1520', borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: 20, maxHeight: '70%',
+    borderTopWidth: 0.5, borderColor: 'rgba(0,229,255,0.15)',
   },
   acHeader: { marginBottom: 12 },
-  acTitle: { fontSize: 16, fontWeight: '700', color: '#111' },
-  acQuery: { fontSize: 13, color: '#2563eb', marginTop: 4, fontWeight: '500' },
-  acHint: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  acTitle: { fontSize: 17, fontWeight: '600', color: '#E8EDF5' },
+  acQuery: { fontSize: 14, color: '#00E5FF', marginTop: 4, fontWeight: '500' },
+  acHint: { fontSize: 13, color: '#8E9DB5', marginTop: 4 },
   acList: { maxHeight: 400 },
-  // System group
-  acSysGroup: { marginBottom: 8, borderRadius: 10, overflow: 'hidden' },
+  acSysGroup: { marginBottom: 8, borderRadius: 12, overflow: 'hidden' },
   acSysHeader: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f3f4f6', paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: 8,
+    backgroundColor: '#141B26', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10,
   },
-  acChevron: { fontSize: 10, color: '#9ca3af', marginRight: 8, width: 14 },
-  acSysHeaderCurrent: { backgroundColor: '#dbeafe' },
-  acGroupArrow: { fontSize: 10, color: '#6b7280', marginRight: 8, width: 14 },
-  acSysTitle: { fontSize: 13, fontWeight: '700', color: '#374151', flex: 1 },
-  acSysTitleCurrent: { color: '#1e40af' },
+  acChevron: { fontSize: 10, color: '#5A6980', marginRight: 10, width: 14 },
+  acSysHeaderCurrent: { backgroundColor: 'rgba(0,229,255,0.06)' },
+  acGroupArrow: { fontSize: 10, color: '#5A6980', marginRight: 10, width: 14 },
+  acSysTitle: { fontSize: 14, fontWeight: '600', color: '#E8EDF5', flex: 1 },
+  acSysTitleCurrent: { color: '#00E5FF' },
   acGroupBadge: {
-    backgroundColor: '#e5e7eb', borderRadius: 10,
-    paddingHorizontal: 8, paddingVertical: 2, minWidth: 24,
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,229,255,0.08)', borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 3, minWidth: 24, alignItems: 'center',
   },
-  acGroupBadgeText: { fontSize: 11, fontWeight: '700', color: '#6b7280' },
-  // System body
+  acGroupBadgeText: { fontSize: 12, fontWeight: '600', color: '#8E9DB5' },
   acSysBody: {
-    backgroundColor: '#fafafa',
-    borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
-    paddingBottom: 4,
+    backgroundColor: '#0F1520',
+    borderBottomLeftRadius: 10, borderBottomRightRadius: 10, paddingBottom: 4,
   },
-  // Layer subgroup
   acLayerGroup: { marginBottom: 2 },
-  acLayerHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 6, paddingHorizontal: 16,
-    backgroundColor: '#f0f4ff',
-  },
-  acLayerLabel: { fontSize: 11, fontWeight: '700', color: '#4b5563', flex: 1 },
-  acLayerCount: { fontSize: 10, color: '#9ca3af' },
-  // Card items
+  acLayerHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 18 },
+  acLayerLabel: { fontSize: 12, fontWeight: '700', color: '#5A6980', flex: 1, textTransform: 'uppercase' },
+  acLayerCount: { fontSize: 11, color: '#5A6980' },
   acItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 10, paddingHorizontal: 20,
-    borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0',
+    paddingVertical: 12, paddingHorizontal: 22,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)',
   },
-  acItemTitle: { fontSize: 14, fontWeight: '600', color: '#2563eb', flex: 1 },
-  acItemPath: { fontSize: 10, color: '#9ca3af', marginLeft: 8, maxWidth: '40%' },
-  // Empty
+  acItemTitle: { fontSize: 15, fontWeight: '600', color: '#00E5FF', flex: 1 },
+  acItemPath: { fontSize: 11, color: '#5A6980', marginLeft: 10, maxWidth: '40%' },
   acEmptyWrap: { padding: 30, alignItems: 'center' },
-  acEmpty: { fontSize: 14, color: '#9ca3af' },
-  acEmptyHint: { fontSize: 12, color: '#d1d5db', marginTop: 4 },
-  // Close
+  acEmpty: { fontSize: 15, color: '#8E9DB5' },
+  acEmptyHint: { fontSize: 13, color: '#5A6980', marginTop: 4 },
   acClose: {
-    marginTop: 12, backgroundColor: '#f3f4f6', borderRadius: 10,
-    paddingVertical: 12, alignItems: 'center',
+    marginTop: 12, backgroundColor: '#141B26', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center',
   },
-  acCloseText: { fontSize: 15, fontWeight: '600', color: '#374151' },
+  acCloseText: { fontSize: 16, fontWeight: '600', color: '#E8EDF5' },
 });

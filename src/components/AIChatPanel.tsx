@@ -1,4 +1,5 @@
-// AI Chat panel — slides up from bottom, covers ~80% screen
+// 医维斯 Ivis — AI Chat Panel (Glass-morphism, neon accents)
+// Slides up from bottom, covers ~80% screen.
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet,
@@ -44,7 +45,7 @@ export default function AIChatPanel() {
       addMessage({
         id: genId(),
         role: 'assistant',
-        content: '你好！我是你的医学学习助手 ✨\n\n我可以帮你：\n• 创建新的知识卡片\n• 补充和编辑已有卡片\n• 搜索你已有的知识\n• 回答医学问题\n\n试试说"帮我创建一张关于心力衰竭的卡片"',
+        content: '⟡ **IVIS** online.\n\n我是你的医学知识操作系统。\n\n* 浏览并管理全部知识卡片\n* 搜索概念，创建新节点\n* 分析学习进度，建议学习路径\n* 导航到 App 任意页面\n\n试试说：\n• "打开心血管系统"\n• "创建一个关于心力衰竭的卡片"\n• "我的学习进度怎么样？"',
         status: 'done',
       });
     }
@@ -54,7 +55,9 @@ export default function AIChatPanel() {
     const text = input.trim();
     if (!text || isLoading) return;
 
-    if (!apiKey) {
+    // In proxy mode no client-side key is needed (proxy injects it)
+    const hasProxy = !!process.env.EXPO_PUBLIC_AI_PROXY_URL;
+    if (!apiKey && !hasProxy) {
       setShowSettings(true);
       return;
     }
@@ -101,11 +104,17 @@ export default function AIChatPanel() {
   if (!isPanelOpen) return null;
 
   return (
-    <Animated.View style={[styles.wrapper, { transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View
+    testID="glass-heavy"
+    style={[
+      styles.wrapper,
+      { transform: [{ translateY: slideAnim }] },
+    ]}
+  >
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>✨ AI 学习助手</Text>
+          <Text style={styles.title}>⟡ IVIS</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.headerBtn}>
               <Text style={styles.headerBtnText}>设置</Text>
@@ -135,6 +144,11 @@ export default function AIChatPanel() {
           }
         />
 
+        {/* Disclaimer */}
+        <View style={styles.disclaimer}>
+          <Text style={styles.disclaimerText}>AI 只是辅助工具，自己动手才能更好地构建知识体系</Text>
+        </View>
+
         {/* Input */}
         <View style={styles.inputBar}>
           <TextInput
@@ -142,7 +156,7 @@ export default function AIChatPanel() {
             value={input}
             onChangeText={setInput}
             placeholder="输入消息..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#B8A99A"
             multiline
             maxLength={2000}
             editable={!isLoading}
@@ -166,42 +180,52 @@ export default function AIChatPanel() {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute', top: 0, left: 0, right: 0, height: PANEL_H,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(10,14,23,0.55)',
     borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
     zIndex: 9998,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, elevation: 10,
-    paddingTop: 48, // safe area
+    shadowColor: '#00E5FF', shadowOpacity: 0.15, shadowRadius: 20, elevation: 10,
+    paddingTop: 48,
+    borderLeftWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5,
+    borderColor: 'rgba(0,229,255,0.10)',
   },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(0,229,255,0.12)',
+    backgroundColor: 'rgba(15,21,32,0.95)',
   },
-  title: { fontSize: 18, fontWeight: '700', color: '#111' },
-  headerRight: { flexDirection: 'row', gap: 12 },
+  title: { fontSize: 18, fontWeight: '800', color: '#00E5FF', letterSpacing: 3 },
+  headerRight: { flexDirection: 'row', gap: 10 },
   headerBtn: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8,
+    backgroundColor: 'rgba(0,229,255,0.08)',
   },
-  headerBtnText: { fontSize: 13, fontWeight: '500', color: '#6b7280' },
+  headerBtnText: { fontSize: 14, fontWeight: '500', color: '#8E9DB5' },
   list: { flex: 1 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
-  emptyText: { fontSize: 14, color: '#9ca3af' },
+  emptyText: { fontSize: 15, color: '#5A6980' },
+  disclaimer: {
+    paddingHorizontal: 16, paddingVertical: 6,
+    alignItems: 'center',
+  },
+  disclaimerText: {
+    fontSize: 12, color: '#5A6980',
+  },
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
     paddingHorizontal: 12, paddingVertical: 10,
-    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb',
+    backgroundColor: 'rgba(15,21,32,0.95)', borderTopWidth: 0.5, borderTopColor: 'rgba(0,229,255,0.12)',
   },
   input: {
-    flex: 1, backgroundColor: '#f3f4f6', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#111',
+    flex: 1, backgroundColor: '#1A2233', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, color: '#E8EDF5',
     maxHeight: 100,
   },
   sendBtn: {
-    backgroundColor: '#7c3aed', borderRadius: 20,
+    backgroundColor: '#00E5FF', borderRadius: 20,
     paddingHorizontal: 18, paddingVertical: 10,
   },
-  sendBtnDisabled: { backgroundColor: '#d1d5db' },
-  sendBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  sendBtnDisabled: { backgroundColor: '#2D3A4D' },
+  sendBtnText: { color: '#080B12', fontSize: 15, fontWeight: '700' },
 });

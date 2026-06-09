@@ -8,7 +8,7 @@ interface Props {
   title: string;
 }
 
-export default function BacklinksList({ title }: Props) {
+export default React.memo(function BacklinksList({ title }: Props) {
   const router = useRouter();
   const [backlinks, setBacklinks] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export default function BacklinksList({ title }: Props) {
       {/* Body */}
       {loading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color="#3b82f6" />
+          <ActivityIndicator size="small" color="#00E5FF" />
           <Text style={styles.loadingText}>扫描中...</Text>
         </View>
       ) : count === 0 ? (
@@ -90,78 +90,70 @@ export default function BacklinksList({ title }: Props) {
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   panel: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: '#0F1520',
+    borderRadius: 16,
     marginTop: 8,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.08)',
   },
 
-  // Header
   header: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: 'rgba(0,229,255,0.06)',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#dbeafe',
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,229,255,0.08)',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
   },
-  headerIcon: { fontSize: 16, marginRight: 6 },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#1e40af' },
-  headerHint: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  headerIcon: { fontSize: 16, marginRight: 8 },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: '#00E5FF' },
+  headerHint: { fontSize: 12, color: '#5A6980', marginTop: 2 },
 
-  // Badge
   badge: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
+    marginLeft: 10,
+    paddingHorizontal: 10,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 12,
   },
-  badgeActive: { backgroundColor: '#2563eb' },
-  badgeEmpty: { backgroundColor: '#e5e7eb' },
+  badgeActive: { backgroundColor: 'rgba(0,229,255,0.15)' },
+  badgeEmpty: { backgroundColor: 'rgba(255,255,255,0.05)' },
   badgeText: { fontSize: 12, fontWeight: '700' },
-  badgeTextActive: { color: '#fff' },
-  badgeTextEmpty: { color: '#9ca3af' },
+  badgeTextActive: { color: '#00E5FF' },
+  badgeTextEmpty: { color: '#5A6980' },
 
-  // Loading
   loadingRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 20, gap: 8,
   },
-  loadingText: { fontSize: 13, color: '#6b7280' },
+  loadingText: { fontSize: 14, color: '#5A6980' },
 
-  // Empty
   emptyBox: {
-    paddingVertical: 24,
+    paddingVertical: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  emptyIcon: { fontSize: 32, marginBottom: 8 },
-  emptyTitle: { fontSize: 14, fontWeight: '600', color: '#6b7280', marginBottom: 6 },
-  emptyHint: { fontSize: 12, color: '#9ca3af', textAlign: 'center', lineHeight: 18 },
+  emptyIcon: { fontSize: 32, marginBottom: 10 },
+  emptyTitle: { fontSize: 15, fontWeight: '600', color: '#8E9DB5', marginBottom: 6 },
+  emptyHint: { fontSize: 13, color: '#5A6980', textAlign: 'center', lineHeight: 20 },
 
-  // Link list
   linkList: { paddingVertical: 4 },
   linkRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, paddingHorizontal: 16,
-    borderBottomWidth: 0.5, borderBottomColor: '#f3f4f6',
+    paddingVertical: 12, paddingHorizontal: 16,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)',
   },
   linkLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  linkArrow: { fontSize: 16, color: '#3b82f6', marginRight: 10, fontWeight: '700' },
+  linkArrow: { fontSize: 16, color: '#00E5FF', marginRight: 10, fontWeight: '700' },
   linkInfo: { flex: 1 },
-  linkName: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
-  linkPath: { fontSize: 11, color: '#9ca3af', marginTop: 1 },
-  linkChevron: { fontSize: 20, color: '#d1d5db', fontWeight: '300' },
+  linkName: { fontSize: 15, fontWeight: '600', color: '#E8EDF5' },
+  linkPath: { fontSize: 12, color: '#5A6980', marginTop: 2 },
+  linkChevron: { fontSize: 20, color: '#2D3A4D', fontWeight: '300' },
 });

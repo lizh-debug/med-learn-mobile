@@ -1,12 +1,16 @@
-// Tab 2: Today - daily card fill entry
-import React, { useEffect, useState } from 'react';
+// Tab 2: Today — 暖铜学术每日卡片
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, RefreshControl, Alert,
+  TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAppStore, type CardMeta } from '../../src/store/useAppStore';
 import { listDirRecursive, readNode, ensureInit } from '../../src/lib/fileStore';
+import { copper, copperBg, paperWhite, jadeWhite, inkColor, ochreGray, clayGray } from '../../src/theme/colors';
+import { shadows, fabShadow } from '../../src/theme/shadows';
+import { spacing, radius } from '../../src/theme/spacing';
 
 export default function TodayScreen() {
   const router = useRouter();
@@ -14,10 +18,16 @@ export default function TodayScreen() {
   const recentCards = useAppStore((s) => s.recentCards);
   const setRecentCards = useAppStore((s) => s.setRecentCards);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasFocused, setHasFocused] = useState(false);
 
-  useEffect(() => {
-    loadRecentCards();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocused) {
+        setHasFocused(true);
+        loadRecentCards();
+      }
+    }, [hasFocused])
+  );
 
   async function loadRecentCards() {
     try {
@@ -56,86 +66,146 @@ export default function TodayScreen() {
     });
   }
 
+  if (!hasFocused) {
+    return (
+      <View style={styles.placeholder}>
+        <ActivityIndicator size="small" color={copper} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Date header */}
-      <View style={styles.dateBanner}>
-        <Text style={styles.dateText}>{today}</Text>
-        <Text style={styles.quoteText}>今天学了什么？</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.largeTitle}>今天学了什么？</Text>
+        <Text style={styles.dateLabel}>{today}</Text>
       </View>
 
-      {/* Recent cards */}
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={copper} />}
       >
         {recentCards.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📝</Text>
-            <Text style={styles.emptyTitle}>还没有卡片</Text>
-            <Text style={styles.emptyHint}>点击下方按钮，填第一张日结卡片</Text>
+            <View style={styles.emptyRing}>
+              <View style={styles.emptyRingInner}>
+                <Ionicons name="sparkles-outline" size={36} color={copper} />
+              </View>
+            </View>
+            <Text style={styles.emptyTitle}>从这里开始记录你的学习轨迹</Text>
+            <Text style={styles.emptyHint}>点击下方 + 按钮，创建第一张知识卡片</Text>
           </View>
         ) : (
           recentCards.map((card, idx) => (
             <TouchableOpacity
               key={idx}
               style={styles.cardRow}
+              activeOpacity={0.7}
               onPress={() => router.push(`/card/${encodeURIComponent(card.path)}`)}
             >
+              {/* Left gradient accent line */}
+              <View style={styles.cardAccent} />
               <View style={styles.cardLeft}>
-                <Text style={styles.cardTitle}>{card.title}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{card.title}</Text>
                 <Text style={styles.cardMeta}>{card.system} · {card.filled}</Text>
               </View>
-              <Text style={styles.cardArrow}>→</Text>
+              <Ionicons name="chevron-forward" size={16} color={clayGray} />
             </TouchableOpacity>
           ))
         )}
+
+        <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* FAB button */}
-      <TouchableOpacity style={styles.fab} onPress={handleNewCard}>
-        <Text style={styles.fabText}>+ 填一张卡片</Text>
+      {/* Copper FAB */}
+      <TouchableOpacity style={styles.fab} activeOpacity={0.85} onPress={handleNewCard}>
+        <Ionicons name="add" size={28} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
-  dateBanner: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    alignItems: 'center',
+  placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: paperWhite },
+  container: { flex: 1, backgroundColor: paperWhite },
+  // ── Header ──
+  header: {
+    backgroundColor: jadeWhite,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(200,134,93,0.1)',
   },
-  dateText: { fontSize: 14, color: '#bfdbfe', fontWeight: '500' },
-  quoteText: { fontSize: 22, color: '#fff', fontWeight: '800', marginTop: 4 },
+  largeTitle: {
+    fontSize: 34,
+    fontWeight: '700',
+    color: inkColor,
+    lineHeight: 41,
+    letterSpacing: 0.37,
+  },
+  dateLabel: {
+    fontSize: 15,
+    color: ochreGray,
+    marginTop: 4,
+  },
+  // ── Card list ──
   list: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 90 },
+  listContent: { padding: spacing.lg },
+  // ── Empty state ──
   emptyState: { alignItems: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#374151' },
-  emptyHint: { fontSize: 14, color: '#9ca3af', marginTop: 4 },
+  emptyRing: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: copperBg,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyRingInner: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: jadeWhite,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: inkColor,
+    marginBottom: 8,
+  },
+  emptyHint: {
+    fontSize: 15,
+    color: ochreGray,
+  },
+  // ── Card row with accent ──
   cardRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    backgroundColor: jadeWhite,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+    ...shadows.sm,
   },
-  cardLeft: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#1f2937' },
-  cardMeta: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
-  cardArrow: { fontSize: 18, color: '#d1d5db' },
+  cardAccent: {
+    width: 4,
+    alignSelf: 'stretch',
+    backgroundColor: copper,
+    opacity: 0.5,
+  },
+  cardLeft: { flex: 1, paddingVertical: spacing.lg, paddingHorizontal: spacing.lg },
+  cardTitle: { fontSize: 17, fontWeight: '600', color: inkColor },
+  cardMeta: { fontSize: 13, color: ochreGray, marginTop: 4 },
+  // ── FAB ──
   fab: {
-    position: 'absolute', bottom: 24, left: 24, right: 24,
-    backgroundColor: '#2563eb',
-    borderRadius: 14,
-    paddingVertical: 16,
+    position: 'absolute',
+    bottom: 32,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: copper,
+    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2563eb', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    ...fabShadow(),
   },
-  fabText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

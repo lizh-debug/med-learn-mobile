@@ -1,13 +1,14 @@
 // Anchor editor – 4-section structured editing for clinical anchors with [[ autocomplete
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Keyboard,
+  TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { serializeMarkdown, parseFrontmatter } from '../lib/markdownParser';
-import { writeFile, readFile, listDirRecursive, ensureInit } from '../lib/fileStore';
-import { useAppStore, SYSTEMS } from '../store/useAppStore';
+import { writeFile, readFile } from '../lib/fileStore';
+import { useAppStore } from '../store/useAppStore';
+import { useAutocomplete, type CardRef } from '../lib/useAutocomplete';
 
 interface Props {
   filePath: string;
@@ -28,97 +29,33 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Autocomplete
-  const [allCards, setAllCards] = useState<Array<{ path: string; title: string; layer: string; system: string }>>([]);
-  const [showAutocomplete, setShowAutocomplete] = useState(false);
-  const [acQuery, setAcQuery] = useState('');
-  const [acField, setAcField] = useState('');
-  const [collapsedSystems, setCollapsedSystems] = useState<Record<string, boolean>>({});
-  const fieldValues = useRef<Record<string, string>>({ oneliner: '', baseLayer: '', bridgeLayer: '', sysLinks: '' });
+  // Autocomplete — shared hook
+  const {
+    allCards, showAutocomplete, acQuery, acField, collapsedSystems, setCollapsedSystems,
+    fieldValues, onFieldChange: acOnFieldChange, handleTriggerLink: acHandleTriggerLink,
+    applyAutocomplete: acApplyAutocomplete, closeAutocomplete, sysLayerGroups,
+  } = useAutocomplete();
+
+  const fieldSetters: Record<string, (t: string) => void> = {
+    oneliner: setOneliner, baseLayer: setBaseLayer, bridgeLayer: setBridgeLayer, sysLinks: setSysLinks,
+  };
+
+  function onFieldChange(text: string, fieldName: string, setter?: (t: string) => void) {
+    acOnFieldChange(text, fieldName, setter || fieldSetters[fieldName]);
+  }
+
+  function handleTriggerLink(fieldName: string) {
+    acHandleTriggerLink(fieldName);
+  }
+
+  function applyAutocomplete(card: CardRef) {
+    acApplyAutocomplete(card, fieldSetters[acField]);
+  }
 
   useEffect(() => {
-    loadCards();
     if (!isNew) loadAnchor();
     else loadTemplate();
   }, [filePath, isNew]);
-
-  async function loadCards() {
-    try {
-      await ensureInit();
-      const cards: Array<{ path: string; title: string; layer: string; system: string }> = [];
-      const seen = new Set<string>();
-
-      // 1. Existing card files
-      const cardFiles = listDirRecursive('卡片');
-      for (const file of cardFiles) {
-        try {
-          const content = await readFile(file);
-          const { frontmatter, body } = parseFrontmatter(content);
-          const t = (frontmatter.birthplace as string) || body.match(/^#\s+(.+)$/m)?.[1] || file.split('/').pop()?.replace('.md', '') || '';
-          const lyr = (frontmatter.layer as string) || '';
-          const sys = (frontmatter.system as string) || file.split('/')[1] || '';
-          cards.push({ path: file, title: t, layer: lyr, system: sys });
-          seen.add(file.replace(/\.md$/, ''));
-        } catch { /* skip */ }
-      }
-
-      // 2. Skeleton nodes (unfilled)
-      const skelFiles = listDirRecursive('骨架');
-      for (const skelFile of skelFiles) {
-        try {
-          const sysName = skelFile.split('/').pop()?.replace('.md', '') || '';
-          const content = await readFile(skelFile);
-          const lines = content.split('\n');
-          let currentLayer = '';
-          for (const line of lines) {
-            if (line.includes('🟢') && (line.includes('基础层') || line.includes('基础'))) currentLayer = '基础';
-            else if (line.includes('🟡') && (line.includes('桥梁层') || line.includes('桥梁'))) currentLayer = '桥梁';
-            else if (line.includes('🔴') && (line.includes('临床层') || line.includes('临床'))) currentLayer = '临床';
-            else if (line.includes('🔵') && (line.includes('前沿层') || line.includes('前沿'))) currentLayer = '前沿';
-
-            const linkMatch = line.match(/\[\[([^\]]+)\]\]/);
-            if (!linkMatch) continue;
-
-            const inner = linkMatch[1];
-            const pipeIdx = inner.indexOf('|');
-            const linkPath = pipeIdx !== -1 ? inner.slice(0, pipeIdx).trim() : inner.trim();
-            let displayName: string;
-
-            const arrowMatch = line.match(/^#+\s*(.+?)\s*→\s*\[\[/);
-            if (arrowMatch) {
-              displayName = arrowMatch[1].trim();
-            } else if (pipeIdx !== -1) {
-              displayName = inner.slice(pipeIdx + 1).trim().replace(/←\s*已填/, '').trim();
-            } else {
-              displayName = linkPath.split('/').pop() || linkPath;
-            }
-            if (!displayName || displayName === '已填') {
-              displayName = linkPath.split('/').pop() || linkPath;
-            }
-
-            const cleanPath = linkPath.replace(/\.md$/, '');
-            if (seen.has(cleanPath)) continue;
-            seen.add(cleanPath);
-
-            cards.push({ path: cleanPath, title: displayName, layer: currentLayer, system: sysName });
-          }
-        } catch { /* skip */ }
-      }
-
-      // 3. Anchor files
-      const anchorFiles = listDirRecursive('临床锚点');
-      for (const file of anchorFiles) {
-        try {
-          const name = file.split('/').pop()?.replace('.md', '') || '';
-          if (name && name !== '临床锚点模板') {
-            cards.push({ path: file, title: `⚓ ${name}`, layer: '', system: '⚓ 临床锚点' });
-          }
-        } catch { /* skip */ }
-      }
-
-      setAllCards(cards);
-    } catch (e) { console.error('loadCards failed:', e); }
-  }
 
   function loadTemplate() {
     setMatrix('| 类型 | 特征 | 病因 |\n|------|------|------|\n| | | |');
@@ -207,160 +144,30 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
     }
   }
 
-  // ---- Autocomplete logic ----
-  function onFieldChange(text: string, fieldName: string) {
-    const setters: Record<string, (t: string) => void> = {
-      oneliner: setOneliner, baseLayer: setBaseLayer, bridgeLayer: setBridgeLayer, sysLinks: setSysLinks,
-    };
-    setters[fieldName]?.(text);
-    fieldValues.current[fieldName] = text;
-
-    const lastOpen = text.lastIndexOf('[[');
-    if (lastOpen === -1 || text.indexOf(']]', lastOpen) !== -1) {
-      setShowAutocomplete(false);
-      return;
-    }
-    setAcQuery(text.slice(lastOpen + 2));
-    setAcField(fieldName);
-    setShowAutocomplete(true);
-  }
-
-  function handleTriggerLink(fieldName: string) {
-    Keyboard.dismiss();
-    setAcQuery('');
-    setAcField(fieldName);
-    setShowAutocomplete(true);
-  }
-
-  function applyAutocomplete(card: { path: string; title: string }) {
-    setShowAutocomplete(false);
-
-    const cleanPath = card.path.replace(/\.md$/, '');
-    const replaceText = `[[${cleanPath}|${card.title}]]`;
-    const currentText = fieldValues.current[acField] || '';
-
-    const setters: Record<string, (t: string) => void> = {
-      oneliner: setOneliner, baseLayer: setBaseLayer, bridgeLayer: setBridgeLayer, sysLinks: setSysLinks,
-    };
-    const setter = setters[acField];
-    if (setter) {
-      const lastOpen = currentText.lastIndexOf('[[');
-      const hasClose = lastOpen !== -1 && currentText.indexOf(']]', lastOpen) !== -1;
-      let newText: string;
-      if (lastOpen !== -1 && !hasClose) {
-        newText = currentText.slice(0, lastOpen) + replaceText;
-      } else {
-        const sep = currentText ? '\n' : '';
-        newText = currentText + sep + replaceText;
-      }
-      setter(newText);
-      fieldValues.current[acField] = newText;
-    }
-  }
-
-  const LAYER_LABELS: Record<string, string> = {
-    '基础': '🟢 基础层', '桥梁': '🟡 桥梁层', '临床': '🔴 临床层', '前沿': '🔵 前沿层',
-  };
-  const LAYER_ORDER = ['基础', '桥梁', '临床', '前沿'];
-
-  const sysLayerGroups = (() => {
-    const q = acQuery.toLowerCase();
-    const matches = allCards.filter(c =>
-      c.title.toLowerCase().includes(q) || c.path.toLowerCase().includes(q)
-    );
-
-    const cardItems = matches.filter(c => c.path.startsWith('卡片/'));
-    const anchorItems = matches.filter(c => c.path.startsWith('临床锚点/'));
-
-    const seen = new Set<string>();
-    const dedupe = <T extends typeof allCards>(items: T) => items.filter(c => {
-      if (seen.has(c.path)) return false;
-      seen.add(c.path);
-      return true;
-    });
-
-    const sysMap = new Map<string, Map<string, typeof allCards>>();
-    for (const c of dedupe(cardItems)) {
-      const sys = c.system || c.path.split('/')[1] || '其他';
-      if (!sysMap.has(sys)) sysMap.set(sys, new Map());
-      const layerMap = sysMap.get(sys)!;
-      const lyr = c.layer || '其他';
-      if (!layerMap.has(lyr)) layerMap.set(lyr, []);
-      layerMap.get(lyr)!.push(c);
-    }
-
-    const sysNames = Array.from(sysMap.keys()).sort((a, b) => {
-      const ai = SYSTEMS.indexOf(a as any);
-      const bi = SYSTEMS.indexOf(b as any);
-      if (ai === -1 && bi === -1) return a.localeCompare(b);
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    });
-
-    const result: Array<{
-      key: string; system: string;
-      layers: Array<{ layer: string; label: string; cards: typeof allCards }>;
-    }> = [];
-
-    for (const sysName of sysNames) {
-      const layerMap = sysMap.get(sysName)!;
-      const layers: Array<{ layer: string; label: string; cards: typeof allCards }> = [];
-
-      const layerNames = Array.from(layerMap.keys()).sort((a, b) => {
-        const ai = LAYER_ORDER.indexOf(a);
-        const bi = LAYER_ORDER.indexOf(b);
-        if (ai === -1 && bi === -1) return a.localeCompare(b);
-        if (ai === -1) return 1;
-        if (bi === -1) return -1;
-        return ai - bi;
-      });
-
-      for (const lyr of layerNames) {
-        const label = LAYER_LABELS[lyr] || lyr;
-        layers.push({ layer: lyr, label, cards: layerMap.get(lyr)! });
-      }
-
-      result.push({ key: `sys-${sysName}`, system: sysName, layers });
-    }
-
-    if (anchorItems.length > 0) {
-      result.push({
-        key: 'anchor', system: '⚓ 临床锚点',
-        layers: [{ layer: '', label: '', cards: dedupe(anchorItems) }],
-      });
-    }
-
-    return result.filter(g => g.layers.some(l => l.cards.length > 0));
-  })();
-
   return (
     <View style={styles.flex}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)/skeleton')} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← 返回</Text>
-          </TouchableOpacity>
           <Text style={styles.pageTitle}>{isNew ? '新建锚点' : `编辑锚点：${title}`}</Text>
         </View>
 
         {isNew ? (
-          <View style={styles.sectionCard}>
+          <View style={styles.sectionCard} testID="glass">
             <Text style={styles.sectionLabel}>锚点名称</Text>
             <TextInput
               style={styles.titleInput}
               value={title}
               onChangeText={setTitle}
               placeholder=""
-              placeholderTextColor="#c7c9cd"
+              placeholderTextColor="#5A6980"
             />
             <Text style={styles.hint}>保存后将创建到 临床锚点/{category}/ 目录</Text>
           </View>
         ) : null}
 
         {/* 1. 一句话概括 */}
-        <View style={styles.sectionCard}>
+        <View style={styles.sectionCard} testID="glass">
           <View style={styles.labelRow}>
             <Text style={styles.sectionLabel}>1. 一句话概括</Text>
             <TouchableOpacity style={styles.linkTrigger} onPress={() => handleTriggerLink('oneliner')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -371,7 +178,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
           <TextInput
             style={styles.fieldMulti}
             value={oneliner}
-            onChangeText={(t) => onFieldChange(t, 'oneliner')}
+            onChangeText={(t) => onFieldChange(t, 'oneliner', setOneliner)}
             placeholder=""
             placeholderTextColor="#c7c9cd"
             multiline textAlignVertical="top"
@@ -379,7 +186,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
         </View>
 
         {/* 2. 鉴别矩阵 */}
-        <View style={styles.sectionCard}>
+        <View style={styles.sectionCard} testID="glass">
           <Text style={styles.sectionLabel}>2. 鉴别矩阵（Markdown 表格）</Text>
           <Text style={styles.hint}>使用 | 分隔列，换行分隔行</Text>
           <TextInput
@@ -393,7 +200,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
         </View>
 
         {/* 3. 反向追溯 */}
-        <View style={styles.sectionCard}>
+        <View style={styles.sectionCard} testID="glass">
           <Text style={styles.sectionLabel}>3. 反向追溯</Text>
 
           <View style={styles.labelRow}>
@@ -406,7 +213,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
           <TextInput
             style={styles.fieldMulti}
             value={baseLayer}
-            onChangeText={(t) => onFieldChange(t, 'baseLayer')}
+            onChangeText={(t) => onFieldChange(t, 'baseLayer', setBaseLayer)}
             placeholder=""
             placeholderTextColor="#c7c9cd"
             multiline textAlignVertical="top"
@@ -422,7 +229,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
           <TextInput
             style={styles.fieldMulti}
             value={bridgeLayer}
-            onChangeText={(t) => onFieldChange(t, 'bridgeLayer')}
+            onChangeText={(t) => onFieldChange(t, 'bridgeLayer', setBridgeLayer)}
             placeholder=""
             placeholderTextColor="#c7c9cd"
             multiline textAlignVertical="top"
@@ -430,7 +237,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
         </View>
 
         {/* 4. 关联系统骨架 */}
-        <View style={styles.sectionCard}>
+        <View style={styles.sectionCard} testID="glass">
           <View style={styles.labelRow}>
             <Text style={styles.sectionLabel}>4. 关联系统骨架</Text>
             <TouchableOpacity style={styles.linkTrigger} onPress={() => handleTriggerLink('sysLinks')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -441,7 +248,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
           <TextInput
             style={styles.fieldMulti}
             value={sysLinks}
-            onChangeText={(t) => onFieldChange(t, 'sysLinks')}
+            onChangeText={(t) => onFieldChange(t, 'sysLinks', setSysLinks)}
             placeholder=""
             placeholderTextColor="#c7c9cd"
             multiline textAlignVertical="top"
@@ -468,7 +275,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
         <View style={styles.acOverlay}>
           <TouchableOpacity
             style={styles.acBackdrop}
-            onPress={() => setShowAutocomplete(false)}
+            onPress={closeAutocomplete}
             activeOpacity={1}
           />
           <View style={styles.acBox}>
@@ -537,7 +344,7 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
             </ScrollView>
             <TouchableOpacity
               style={styles.acClose}
-              onPress={() => setShowAutocomplete(false)}
+              onPress={closeAutocomplete}
             >
               <Text style={styles.acCloseText}>关闭</Text>
             </TouchableOpacity>
@@ -549,94 +356,87 @@ export default function AnchorEditor({ filePath, isNew, category }: Props) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#f8f9fa' },
+  flex: { flex: 1, backgroundColor: '#080B12' },
   container: { flex: 1 },
   content: { padding: 16 },
-  topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 },
-  backBtn: { backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  backBtnText: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  pageTitle: { fontSize: 18, fontWeight: '800', color: '#111' },
+  topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  pageTitle: { fontSize: 20, fontWeight: '700', color: '#E8EDF5' },
 
-  titleInput: { fontSize: 18, fontWeight: '600', color: '#111', padding: 0 },
+  titleInput: { fontSize: 18, fontWeight: '600', color: '#E8EDF5', padding: 0 },
 
   sectionCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12,
-    shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 3, elevation: 1,
+    backgroundColor: '#0F1520', borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.08)',
   },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#1e40af' },
-  subLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 10 },
+  sectionLabel: { fontSize: 15, fontWeight: '700', color: '#00E5FF' },
+  subLabel: { fontSize: 14, fontWeight: '600', color: '#E8EDF5', marginTop: 12 },
   linkTrigger: { padding: 4 },
-  linkTriggerText: { fontSize: 14 },
-  hint: { fontSize: 10, color: '#b0b7c3', marginBottom: 6, fontStyle: 'italic' },
-  fieldMulti: { fontSize: 14, color: '#1f2937', minHeight: 56, padding: 0, textAlignVertical: 'top' },
-  fieldMultiLarge: { fontSize: 13, color: '#1f2937', minHeight: 120, padding: 0, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  linkTriggerText: { fontSize: 16 },
+  hint: { fontSize: 13, color: '#5A6980', marginBottom: 8, fontStyle: 'italic' },
+  fieldMulti: { fontSize: 16, color: '#E8EDF5', minHeight: 60, padding: 0, textAlignVertical: 'top' },
+  fieldMultiLarge: { fontSize: 14, color: '#E8EDF5', minHeight: 120, padding: 0, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
   saveBtn: {
-    backgroundColor: '#2563eb', borderRadius: 14, paddingVertical: 16,
+    backgroundColor: '#00E5FF', borderRadius: 12, paddingVertical: 16,
     alignItems: 'center', marginTop: 8,
+    shadowColor: '#00E5FF', shadowOpacity: 0.35, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 6,
   },
-  saveBtnDone: { backgroundColor: '#22c55e' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  saveBtnDone: { backgroundColor: '#00FF88' },
+  saveBtnText: { color: '#080B12', fontSize: 16, fontWeight: '700' },
 
-  // Autocomplete overlay
   acOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 9999, justifyContent: 'flex-end',
   },
   acBackdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   acBox: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: '#0F1520', borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: 20, maxHeight: '70%',
+    borderTopWidth: 0.5, borderColor: 'rgba(0,229,255,0.15)',
   },
   acHeader: { marginBottom: 12 },
-  acTitle: { fontSize: 16, fontWeight: '700', color: '#111' },
-  acQuery: { fontSize: 13, color: '#2563eb', marginTop: 4, fontWeight: '500' },
-  acHint: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  acTitle: { fontSize: 17, fontWeight: '600', color: '#E8EDF5' },
+  acQuery: { fontSize: 14, color: '#00E5FF', marginTop: 4, fontWeight: '500' },
+  acHint: { fontSize: 13, color: '#8E9DB5', marginTop: 4 },
   acList: { maxHeight: 400 },
-  acSysGroup: { marginBottom: 8, borderRadius: 10, overflow: 'hidden' },
+  acSysGroup: { marginBottom: 8, borderRadius: 12, overflow: 'hidden' },
   acSysHeader: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f3f4f6', paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: 8,
+    backgroundColor: '#141B26', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10,
   },
-  acSysHeaderCurrent: { backgroundColor: '#dbeafe' },
-  acChevron: { fontSize: 10, color: '#9ca3af', marginRight: 8, width: 14 },
-  acSysTitle: { fontSize: 13, fontWeight: '700', color: '#374151', flex: 1 },
-  acSysTitleCurrent: { color: '#1e40af' },
+  acSysHeaderCurrent: { backgroundColor: 'rgba(0,229,255,0.06)' },
+  acChevron: { fontSize: 10, color: '#5A6980', marginRight: 10, width: 14 },
+  acSysTitle: { fontSize: 14, fontWeight: '600', color: '#E8EDF5', flex: 1 },
+  acSysTitleCurrent: { color: '#00E5FF' },
   acGroupBadge: {
-    backgroundColor: '#e5e7eb', borderRadius: 10,
-    paddingHorizontal: 8, paddingVertical: 2, minWidth: 24, alignItems: 'center',
+    backgroundColor: 'rgba(0,229,255,0.08)', borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 3, minWidth: 24, alignItems: 'center',
   },
-  acGroupBadgeText: { fontSize: 11, fontWeight: '700', color: '#6b7280' },
+  acGroupBadgeText: { fontSize: 12, fontWeight: '600', color: '#8E9DB5' },
   acSysBody: {
-    backgroundColor: '#fafafa',
-    borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
-    paddingBottom: 4,
+    backgroundColor: '#0F1520',
+    borderBottomLeftRadius: 10, borderBottomRightRadius: 10, paddingBottom: 4,
   },
   acLayerGroup: { marginBottom: 2 },
-  acLayerHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 6, paddingHorizontal: 16,
-    backgroundColor: '#f0f4ff',
-  },
-  acLayerLabel: { fontSize: 11, fontWeight: '700', color: '#4b5563', flex: 1 },
-  acLayerCount: { fontSize: 10, color: '#9ca3af' },
+  acLayerHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 18 },
+  acLayerLabel: { fontSize: 12, fontWeight: '700', color: '#5A6980', flex: 1, textTransform: 'uppercase' },
+  acLayerCount: { fontSize: 11, color: '#5A6980' },
   acItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 10, paddingHorizontal: 20,
-    borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0',
+    paddingVertical: 12, paddingHorizontal: 22,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)',
   },
-  acItemTitle: { fontSize: 14, fontWeight: '600', color: '#2563eb', flex: 1 },
-  acItemPath: { fontSize: 10, color: '#9ca3af', marginLeft: 8, maxWidth: '40%' },
+  acItemTitle: { fontSize: 15, fontWeight: '600', color: '#00E5FF', flex: 1 },
+  acItemPath: { fontSize: 11, color: '#5A6980', marginLeft: 10, maxWidth: '40%' },
   acEmptyWrap: { padding: 30, alignItems: 'center' },
-  acEmpty: { fontSize: 14, color: '#9ca3af' },
+  acEmpty: { fontSize: 15, color: '#8E9DB5' },
   acClose: {
-    marginTop: 12, backgroundColor: '#f3f4f6', borderRadius: 10,
-    paddingVertical: 12, alignItems: 'center',
+    marginTop: 12, backgroundColor: '#141B26', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center',
   },
-  acCloseText: { fontSize: 15, fontWeight: '600', color: '#374151' },
+  acCloseText: { fontSize: 16, fontWeight: '600', color: '#E8EDF5' },
 });

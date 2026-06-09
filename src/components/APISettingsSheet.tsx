@@ -84,7 +84,7 @@ export default function APISettingsSheet({ visible, onClose }: Props) {
             value={apiKey}
             onChangeText={setApiKey}
             placeholder="sk-..."
-            placeholderTextColor="#c7c9cd"
+            placeholderTextColor="#5A6980"
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -98,7 +98,7 @@ export default function APISettingsSheet({ visible, onClose }: Props) {
             value={endpoint}
             onChangeText={setEndpoint}
             placeholder="https://api.deepseek.com/v1"
-            placeholderTextColor="#c7c9cd"
+            placeholderTextColor="#5A6980"
             autoCapitalize="none"
           />
 
@@ -108,12 +108,12 @@ export default function APISettingsSheet({ visible, onClose }: Props) {
             value={model}
             onChangeText={setModel}
             placeholder="deepseek-chat"
-            placeholderTextColor="#c7c9cd"
+            placeholderTextColor="#5A6980"
           />
 
           <View style={styles.btns}>
             <TouchableOpacity style={styles.testBtn} onPress={handleTest} disabled={testing}>
-              {testing ? <ActivityIndicator size="small" color="#7c3aed" /> : <Text style={styles.testBtnText}>测试连接</Text>}
+              {testing ? <ActivityIndicator size="small" color="#00E5FF" /> : <Text style={styles.testBtnText}>测试连接</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
               <Text style={styles.saveBtnText}>保存</Text>
@@ -136,30 +136,31 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   sheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: '#0F1520', borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: 24, maxHeight: '80%',
+    borderTopWidth: 0.5, borderColor: 'rgba(0,229,255,0.15)',
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 20 },
-  label: { fontSize: 13, fontWeight: '600', color: '#6b7280', marginBottom: 4, marginTop: 12 },
-  hint: { fontSize: 11, color: '#9ca3af', lineHeight: 16, marginBottom: 4 },
+  title: { fontSize: 20, fontWeight: '700', color: '#E8EDF5', marginBottom: 20 },
+  label: { fontSize: 13, fontWeight: '600', color: '#8E9DB5', marginBottom: 4, marginTop: 12 },
+  hint: { fontSize: 11, color: '#5A6980', lineHeight: 16, marginBottom: 4 },
   input: {
-    backgroundColor: '#f3f4f6', borderRadius: 10, padding: 12,
-    fontSize: 14, color: '#111',
+    backgroundColor: '#1A2233', borderRadius: 10, padding: 12,
+    fontSize: 14, color: '#E8EDF5',
   },
   btns: { flexDirection: 'row', gap: 12, marginTop: 20 },
   testBtn: {
-    flex: 1, backgroundColor: '#f3f4f6', borderRadius: 12,
+    flex: 1, backgroundColor: 'rgba(0,229,255,0.08)', borderRadius: 12,
     paddingVertical: 14, alignItems: 'center',
   },
-  testBtnText: { fontSize: 15, fontWeight: '600', color: '#7c3aed' },
+  testBtnText: { fontSize: 15, fontWeight: '600', color: '#00E5FF' },
   saveBtn: {
-    flex: 1, backgroundColor: '#7c3aed', borderRadius: 12,
+    flex: 1, backgroundColor: '#00E5FF', borderRadius: 12,
     paddingVertical: 14, alignItems: 'center',
   },
-  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#080B12' },
   clearBtn: { marginTop: 16, alignItems: 'center' },
-  clearBtnText: { fontSize: 14, color: '#ef4444' },
+  clearBtnText: { fontSize: 14, color: '#FF3D71' },
 });

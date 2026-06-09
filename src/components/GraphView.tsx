@@ -125,7 +125,7 @@ export default function GraphView() {
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <style>
     * { margin: 0; padding: 0; }
-    body { background: #f0f2f5; overflow: hidden; }
+    body { background: #FAF7F2; overflow: hidden; }
     #graph { width: 100vw; height: 100vh; }
   </style>
 </head>
@@ -155,17 +155,17 @@ export default function GraphView() {
     const velocities = {};
 
     const colors = {
-      '骨架': '#f59e0b',
-      '卡片': '#3b82f6',
-      '临床锚点': '#ef4444',
-      '未填写': '#d1d5db',
+      '骨架': '#E8953A',
+      '卡片': '#C8865D',
+      '临床锚点': '#D4685A',
+      '未填写': '#D1D1D6',
     };
 
     function getColor(group) {
       for (const key of Object.keys(colors)) {
         if (group && group.includes(key)) return colors[key];
       }
-      return '#3b82f6';
+      return '#C8865D';
     }
 
     nodes.forEach((n, i) => {
@@ -300,7 +300,7 @@ export default function GraphView() {
       ctx.clearRect(0, 0, W, H);
 
       // Edges
-      ctx.strokeStyle = '#e5e7eb';
+      ctx.strokeStyle = 'rgba(200, 134, 93, 0.18)';
       ctx.lineWidth = 0.6;
       for (const edge of edges) {
         const from = positions[edge.from];
@@ -320,12 +320,21 @@ export default function GraphView() {
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = n.filled ? getColor(n.group) : '#d1d5db';
+        ctx.fillStyle = n.filled ? getColor(n.group) : '#D1D1D6';
         ctx.fill();
 
+        // Copper pulse glow on center-ish nodes (degree > 3)
         const degree = edgeMap[n.id]?.size || 0;
+        if (degree > 3) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(200, 134, 93, 0.25)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
         if (degree > 1 || n.filled) {
-          ctx.fillStyle = '#374151';
+          ctx.fillStyle = '#1C1C2A';
           ctx.font = '10px system-ui, sans-serif';
           ctx.fillText(n.label, p.x + 7, p.y + 4);
         }
@@ -347,7 +356,7 @@ export default function GraphView() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#C8865D" />
         <Text style={styles.loadingText}>构建知识图谱...</Text>
       </View>
     );
@@ -376,16 +385,16 @@ export default function GraphView() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f2f5' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 8, color: '#6b7280', fontSize: 14 },
+  container: { flex: 1, backgroundColor: '#FAF7F2' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAF7F2' },
+  loadingText: { marginTop: 8, color: '#8B7E74', fontSize: 14 },
   statsBar: {
     flexDirection: 'row', justifyContent: 'center', gap: 40,
-    paddingVertical: 10, backgroundColor: '#fff',
-    borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb',
+    paddingVertical: 12, backgroundColor: 'rgba(255,252,248,0.88)',
+    borderBottomWidth: 0.5, borderBottomColor: '#E8E0D5',
   },
   stat: { alignItems: 'center' },
-  statNum: { fontSize: 20, fontWeight: '800', color: '#2563eb' },
-  statLabel: { fontSize: 11, color: '#9ca3af' },
+  statNum: { fontSize: 20, fontWeight: '800', color: '#C8865D' },
+  statLabel: { fontSize: 11, color: '#8B7E74' },
   webview: { flex: 1 },
 });

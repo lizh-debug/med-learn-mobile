@@ -6,63 +6,7 @@ import { readNode, deleteFile, ensureInit } from '../../src/lib/fileStore';
 import { parseLine } from '../../src/lib/markdownParser';
 import { useAppStore } from '../../src/store/useAppStore';
 import WikiLinkText from '../../src/components/WikiLinkText';
-
-// ---- Table renderer ----
-function parseTableRows(rows: string[]): { header: string[]; data: string[][] } {
-  if (rows.length === 0) return { header: [], data: [] };
-  const header = splitCells(rows[0]);
-  const data: string[][] = [];
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i].match(/^\|[\s\-:|]+$/)) continue; // separator row
-    data.push(splitCells(rows[i]));
-  }
-  return { header, data };
-}
-
-function splitCells(row: string): string[] {
-  return row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-}
-
-function MarkdownTable({ rows }: { rows: string[] }) {
-  const { header, data } = parseTableRows(rows);
-  if (header.length === 0) return null;
-
-  const allRows = [header, ...data];
-  const colCount = header.length;
-  // Calculate column widths based on content
-  const colWidths: number[] = Array(colCount).fill(60);
-  for (const row of allRows) {
-    for (let i = 0; i < colCount; i++) {
-      const len = (row[i] || '').length;
-      colWidths[i] = Math.max(colWidths[i], Math.min(len * 8 + 16, 150));
-    }
-  }
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
-      <View style={styles.tableWrap}>
-        {/* Header */}
-        <View style={styles.tableHeaderRow}>
-          {header.map((cell, ci) => (
-            <View key={ci} style={[styles.tableHeaderCell, { width: colWidths[ci] }]}>
-              <Text style={styles.tableHeaderText}>{cell}</Text>
-            </View>
-          ))}
-        </View>
-        {/* Data rows */}
-        {data.map((row, ri) => (
-          <View key={ri} style={[styles.tableDataRow, ri % 2 === 0 && styles.tableDataRowEven]}>
-            {row.map((cell, ci) => (
-              <View key={ci} style={[styles.tableDataCell, { width: colWidths[ci] }]}>
-                <Text style={styles.tableDataText}>{cell}</Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
-  );
-}
+import MarkdownTable from '../../src/components/MarkdownTable';
 
 // ---- Main screen ----
 export default function AnchorDetailScreen() {
@@ -127,7 +71,7 @@ export default function AnchorDetailScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#00E5FF" />
       </View>
     );
   }
@@ -172,10 +116,9 @@ export default function AnchorDetailScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={() => router.replace('/(tabs)/skeleton')} style={styles.backBtn}>
+      <TouchableOpacity onPress={() => { if (router.canGoBack()) router.back(); else router.push('/(tabs)/clinical'); }} style={styles.backBtn}>
         <Text style={styles.backBtnText}>← 返回</Text>
       </TouchableOpacity>
-
       <View style={styles.titleRow}>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.headerActions}>
@@ -237,48 +180,47 @@ export default function AnchorDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1, backgroundColor: '#080B12' },
   content: { padding: 16 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#080B12' },
   backBtn: {
-    backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 8, alignSelf: 'flex-start', marginBottom: 8,
+    paddingHorizontal: 0, paddingVertical: 8, alignSelf: 'flex-start', marginBottom: 4,
   },
-  backBtnText: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  title: { fontSize: 22, fontWeight: '800', color: '#111', flex: 1 },
+  backBtnText: { fontSize: 14, fontWeight: '600', color: '#00E5FF' },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  title: { fontSize: 22, fontWeight: '700', color: '#E8EDF5', flex: 1 },
   headerActions: { flexDirection: 'row', gap: 8 },
   editBtn: {
-    backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+    backgroundColor: '#00E5FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
   },
-  editBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  editBtnText: { color: '#080B12', fontSize: 13, fontWeight: '600' },
   deleteBtn: {
-    backgroundColor: '#ef4444', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+    backgroundColor: '#FF3D71', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
   },
   deleteBtnDisabled: { opacity: 0.5 },
-  deleteBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  h2: { fontSize: 17, fontWeight: '700', color: '#1e40af', marginTop: 18, marginBottom: 8 },
-  h3: { fontSize: 15, fontWeight: '600', color: '#374151', marginTop: 14, marginBottom: 6 },
+  deleteBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  h2: { fontSize: 20, fontWeight: '700', color: '#00E5FF', marginTop: 24, marginBottom: 10 },
+  h3: { fontSize: 17, fontWeight: '600', color: '#E8EDF5', marginTop: 16, marginBottom: 8 },
   quoteBox: {
-    backgroundColor: '#eff6ff', borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6', padding: 10, marginVertical: 6, borderRadius: 4,
+    backgroundColor: 'rgba(0,229,255,0.06)', borderLeftWidth: 3,
+    borderLeftColor: '#00E5FF', padding: 12, marginVertical: 8, borderRadius: 8,
   },
-  quote: { fontSize: 14, color: '#374151', lineHeight: 20, fontStyle: 'italic' },
-  linkLine: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 3, paddingLeft: 8 },
-  bullet: { fontSize: 14, color: '#6b7280' },
-  listItem: { fontSize: 14, color: '#374151', marginVertical: 2, paddingLeft: 16, lineHeight: 22 },
-  paragraph: { fontSize: 14, color: '#374151', lineHeight: 22, marginVertical: 4 },
-  spacer: { height: 8 },
-  bottomPad: { height: 60 },
+  quote: { fontSize: 15, color: '#E8EDF5', lineHeight: 22, fontStyle: 'italic' },
+  linkLine: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, paddingLeft: 8 },
+  bullet: { fontSize: 15, color: '#8E9DB5' },
+  listItem: { fontSize: 15, color: '#E8EDF5', marginVertical: 3, paddingLeft: 16, lineHeight: 22 },
+  paragraph: { fontSize: 17, color: '#E8EDF5', lineHeight: 24, marginVertical: 4 },
+  spacer: { height: 10 },
+  bottomPad: { height: 120 },
 
   // Table styles
   tableScroll: { marginVertical: 12, borderRadius: 8, overflow: 'hidden' },
-  tableWrap: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, overflow: 'hidden' },
-  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#2563eb' },
+  tableWrap: { borderWidth: 1, borderColor: '#1E2838', borderRadius: 8, overflow: 'hidden' },
+  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#00E5FF' },
   tableHeaderCell: { paddingVertical: 8, paddingHorizontal: 8, justifyContent: 'center' },
-  tableHeaderText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  tableDataRow: { flexDirection: 'row', backgroundColor: '#fff' },
-  tableDataRowEven: { backgroundColor: '#f9fafb' },
+  tableHeaderText: { fontSize: 12, fontWeight: '700', color: '#080B12' },
+  tableDataRow: { flexDirection: 'row', backgroundColor: '#0F1520' },
+  tableDataRowEven: { backgroundColor: '#141B26' },
   tableDataCell: { paddingVertical: 6, paddingHorizontal: 8, justifyContent: 'center' },
-  tableDataText: { fontSize: 11, color: '#374151', lineHeight: 16 },
+  tableDataText: { fontSize: 12, color: '#E8EDF5', lineHeight: 16 },
 });

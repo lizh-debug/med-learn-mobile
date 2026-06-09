@@ -65,7 +65,7 @@ async function ensureNative() {
 
 // ---- Init ----
 let initialized = false;
-const PRESET_VERSION = '8';
+const PRESET_VERSION = '10';
 
 export async function ensureInit(): Promise<void> {
   if (initialized) return;

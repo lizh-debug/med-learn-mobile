@@ -85,7 +85,7 @@ export default function OverviewScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#C8865D" />
       </View>
     );
   }
@@ -181,29 +181,29 @@ export default function OverviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1, backgroundColor: '#FAF7F2' },
   content: { padding: 16 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  h1: { fontSize: 24, fontWeight: '800', color: '#111', marginBottom: 16 },
-  h2: { fontSize: 18, fontWeight: '700', color: '#1e40af', marginTop: 20, marginBottom: 10 },
-  h3: { fontSize: 15, fontWeight: '600', color: '#374151', marginTop: 14, marginBottom: 6 },
+  h1: { fontSize: 24, fontWeight: '800', color: '#1C1C2A', marginBottom: 16 },
+  h2: { fontSize: 18, fontWeight: '700', color: '#4A6785', marginTop: 20, marginBottom: 10 },
+  h3: { fontSize: 15, fontWeight: '600', color: '#1C1C2A', marginTop: 14, marginBottom: 6 },
   quoteBox: {
-    backgroundColor: '#eff6ff', borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6', padding: 10, marginVertical: 6, borderRadius: 4,
+    backgroundColor: '#F5EDE4', borderLeftWidth: 3,
+    borderLeftColor: '#C8865D', padding: 10, marginVertical: 6, borderRadius: 4,
   },
-  quote: { fontSize: 14, color: '#374151', lineHeight: 20, fontStyle: 'italic' },
+  quote: { fontSize: 14, color: '#1C1C2A', lineHeight: 20, fontStyle: 'italic' },
   linkLine: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 3, paddingLeft: 8 },
-  listItem: { fontSize: 14, color: '#374151', marginVertical: 3, paddingLeft: 16, lineHeight: 22 },
-  paragraph: { fontSize: 14, color: '#374151', lineHeight: 22, marginVertical: 4 },
+  listItem: { fontSize: 14, color: '#1C1C2A', marginVertical: 3, paddingLeft: 16, lineHeight: 22 },
+  paragraph: { fontSize: 14, color: '#1C1C2A', lineHeight: 22, marginVertical: 4 },
   spacer: { height: 8 },
   bottomPad: { height: 60 },
   tableScroll: { marginVertical: 12, borderRadius: 8, overflow: 'hidden' },
-  tableWrap: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, overflow: 'hidden' },
-  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#2563eb' },
+  tableWrap: { borderWidth: 1, borderColor: '#E8E0D5', borderRadius: 8, overflow: 'hidden' },
+  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#C8865D' },
   tableHeaderCell: { paddingVertical: 8, paddingHorizontal: 8, justifyContent: 'center' },
-  tableHeaderText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  tableDataRow: { flexDirection: 'row', backgroundColor: '#fff' },
-  tableDataRowEven: { backgroundColor: '#f9fafb' },
+  tableHeaderText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  tableDataRow: { flexDirection: 'row', backgroundColor: '#FFFCF8' },
+  tableDataRowEven: { backgroundColor: '#FAF7F2' },
   tableDataCell: { paddingVertical: 6, paddingHorizontal: 8, justifyContent: 'center' },
-  tableDataText: { fontSize: 11, color: '#374151', lineHeight: 16 },
+  tableDataText: { fontSize: 11, color: '#1C1C2A', lineHeight: 16 },
 });

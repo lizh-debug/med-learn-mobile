@@ -10,7 +10,7 @@ interface Props {
   onLinkPress?: (linkPath: string) => void;
 }
 
-export default function WikiLinkText({ nodes, onLinkPress }: Props) {
+export default React.memo(function WikiLinkText({ nodes, onLinkPress }: Props) {
   const router = useRouter();
 
   const handlePress = (linkPath: string) => {
@@ -69,12 +69,12 @@ export default function WikiLinkText({ nodes, onLinkPress }: Props) {
       })}
     </Text>
   );
-}
+});
 
 const styles = StyleSheet.create({
-  line: { fontSize: 15, lineHeight: 22, color: '#1a1a2e' },
-  link: { color: '#2563eb', fontWeight: '600' },
-  speedAnchor: { color: '#7c3aed', fontStyle: 'italic' },
-  plain: { color: '#1a1a2e' },
-  emptyLink: { color: '#d1d5db', fontStyle: 'italic' },
+  line: { fontSize: 15, lineHeight: 22, color: '#E8EDF5' },
+  link: { color: '#00E5FF', fontWeight: '600' },
+  speedAnchor: { color: '#FFB800', fontStyle: 'italic' },
+  plain: { color: '#E8EDF5' },
+  emptyLink: { color: '#5A6980', fontStyle: 'italic' },
 });

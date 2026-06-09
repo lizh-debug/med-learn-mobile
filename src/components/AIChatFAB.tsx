@@ -3,7 +3,7 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useChatStore } from '../store/useChatStore';
 
-export default function AIChatFAB() {
+export default React.memo(function AIChatFAB() {
   const isPanelOpen = useChatStore((s) => s.isPanelOpen);
   const openPanel = useChatStore((s) => s.openPanel);
 
@@ -14,17 +14,27 @@ export default function AIChatFAB() {
       <Text style={styles.icon}>✨</Text>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fab: {
-    position: 'absolute', bottom: 100, right: 20,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#7c3aed',
-    justifyContent: 'center', alignItems: 'center',
+    position: 'absolute',
+    bottom: 100,
+    left: 24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFCF8',
+    justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 9997,
-    shadowColor: '#7c3aed', shadowOpacity: 0.35, shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8, elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E8E0D5',
+    shadowColor: '#8B6F5A',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
   },
-  icon: { fontSize: 24 },
+  icon: { fontSize: 22 },
 });

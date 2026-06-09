@@ -1,0 +1,6 @@
+name = "med-learn-ai-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Deploy with: npx wrangler deploy
+# Set secret with: npx wrangler secret put DEEPSEEK_API_KEY
