@@ -10,6 +10,7 @@ import { parseLine, extractWikiLinks } from '../lib/markdownParser';
 import { useAppStore } from '../store/useAppStore';
 import BacklinksList from './BacklinksList';
 import MarkdownTable from './MarkdownTable';
+import WikiLinkText from './WikiLinkText';
 
 interface Props {
   filePath: string;
@@ -379,16 +380,7 @@ export default React.memo(function CardView({ filePath, isSpeedAnchor, speedCont
           const nodes = parseLine(trimmed);
           return (
             <View key={idx} style={styles.linkLine}>
-              {nodes.map((node, ni) => {
-                if (node.isWikiLink) {
-                  return (
-                    <Pressable key={ni} onPress={() => handleLinkPress(node.linkPath!)}>
-                      <Text style={styles.inlineLink}>[[{node.text}]]</Text>
-                    </Pressable>
-                  );
-                }
-                return <Text key={ni} style={styles.linkPlain}>{node.text} </Text>;
-              })}
+              <WikiLinkText nodes={nodes} />
             </View>
           );
         }
