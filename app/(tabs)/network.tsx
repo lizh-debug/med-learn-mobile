@@ -73,9 +73,9 @@ function generateGraphHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
   * { margin:0; padding:0; }
-  body { background:#080B12; overflow:hidden; cursor:grab; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#080B12; cursor:grab; }
   body:active { cursor:grabbing; }
-  #graph { width:100vw; height:100vh; }
+  #graph { width:100%; height:100%; display:block; }
 </style>
 </head>
 <body>

@@ -18,9 +18,15 @@ export default function RootLayout() {
   const pendingNav = useAppStore((s) => s.pendingNavigation);
   const setPendingNav = useAppStore((s) => s.setPendingNavigation);
 
-  // Inject liquid glass CSS globally on web
+  // Inject CSS + cache control on web
   useEffect(() => {
     if (typeof document !== 'undefined' && !document.getElementById('ivis-glass-css')) {
+      // Cache control meta
+      const meta = document.createElement('meta');
+      meta.httpEquiv = 'Cache-Control';
+      meta.content = 'no-cache, no-store, must-revalidate';
+      document.head.appendChild(meta);
+
       const style = document.createElement('style');
       style.id = 'ivis-glass-css';
       style.textContent = `
